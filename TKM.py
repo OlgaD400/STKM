@@ -15,7 +15,7 @@ def simplex_prox(z: np.ndarray, a: int) -> np.ndarray:
         (np.ndarray): Projection of matrix z onto the a simplex.
     """
     u = z.copy()
-    u[:, :, ::-1].sort(axis=2)
+    u[..., ::-1].sort(axis=2)
     j = np.arange(u.shape[2])
     v = (a - np.cumsum(u, axis=2)) / (j + 1)
     i = np.repeat(j[None, :], u.shape[1], axis=0)
@@ -27,6 +27,34 @@ def simplex_prox(z: np.ndarray, a: int) -> np.ndarray:
     ].reshape(u.shape[0], u.shape[1], 1)
     return np.maximum(z + lam, 0.0)
 
+
+def simplex_prox_2d(z: np.ndarray, a: float) -> np.ndarray:
+    """
+    Project onto simplex.
+
+    Args:
+        z:  Variable to be projected. Assume ``x`` is a matrix, each row will be projected onto a simplex.
+        a:  Simplex to be projected onto.
+    Returns:
+        np.maximum(z + lam, 0.0) (np.ndarray): Projected variable.
+    """
+    u = z.copy()
+
+    if u.ndim == 1:
+        u = u[np.newaxis, :]
+
+    u[:, ::-1].sort(axis=1)
+
+    j = np.arange(u.shape[1])
+    v = (a - np.cumsum(u, axis=1)) / (j + 1)
+
+    i = np.repeat(j[None, :], u.shape[0], axis=0)
+    rho = np.max(i * (u + v > 0), axis=1)
+
+    lam = v[np.arange(u.shape[0]), rho][:, None]
+
+    #     print('\n\n lam', lam, '\n\n')
+    return np.maximum(z + lam, 0.0)
 
 class TKM:
     r"""
@@ -147,6 +175,108 @@ class TKM:
 
             sum_term_1 = np.sum(
                 np.linalg.norm(self.data - centers @ np.transpose(weights, axes=[0, 2, 1]), 2, axis=1)** 2)
+
+            sum_term_2 = np.sum(
+                lam * np.linalg.norm(centers_new - centers_shifted, 2, axis=1) ** 2
+            )
+
+            obj = sum_term_1 + sum_term_2
+
+            obj_hist.append(obj)
+            err_hist.append(err)
+
+            iter_count += 1
+
+            if iter_count % 100 == 0:
+                print("Iteration", iter_count)
+
+            if iter_count >= max_iter:
+                print("Maximum number of iterations")
+                self.centers = centers
+                self.weights = weights
+                self.obj_hist = obj_hist
+                self.err_hist = err_hist
+                break
+
+        self.centers = centers
+        self.weights = weights
+        self.obj_hist = obj_hist
+        self.err_hist = err_hist
+
+    def perform_clustering_constant_weights(
+        self,
+        k: int,
+        tol: float = 1e-6,
+        max_iter: int = 100,
+        lam: Optional[float] = 0.70,
+        init_centers: Optional[np.ndarray] = None
+    ) -> None:
+        """
+        Perform Time k Means algorithm and set values for TKM attributes.
+
+        Sets values for predicted cluster centers, cluster membership weights, outliers, objective function values over
+        iterations, and error values over iterations.
+
+        Args:
+            k (int): Number of clusters.
+            tol (float): Error tolerance for convergence of algorithm.
+            max_iter (int): Max number of iterations for algorithm.
+            lam (float): Parameter controlling strength of constraint that cluster centers should not move over time.
+            init_centers (np.ndarray): Initial centers for algorithm.
+        """
+        t, m, n = self.data.shape
+
+        if init_centers is None:
+            centers = self.data[:, :, np.random.choice(n, k)]
+        else:
+            centers = init_centers
+
+        dk = 1.1
+
+        iter_count = 0
+        err = tol + 1.0
+
+        obj_hist = []
+        err_hist = []
+
+        weights = np.random.rand(n, k)
+
+        centers_shifted = np.vstack(
+            (centers[0, :, :][np.newaxis, :, :], centers[:-1, :, :])
+        )
+
+        while err >= tol:
+            data_norm = np.linalg.norm(self.data, 2, axis=1) ** 2
+
+            centers_new = (self.data @ weights + n * lam * centers_shifted) / (
+                np.sum(weights, axis=0)[np.newaxis, np.newaxis, :] + lam * n
+            )
+
+            centers_norm = np.linalg.norm(centers_new, 2, axis=1) ** 2
+
+            weights_op_constrained = weights - 1 / dk * np.sum((
+                data_norm[:, :, np.newaxis]
+                - 2 * np.transpose(self.data, axes=[0, 2, 1]) @ centers_new
+                + centers_norm[:, np.newaxis, :]
+            ), axis=0)
+
+            weights_new = simplex_prox_2d(weights_op_constrained, 1)
+
+
+            centers_err = np.linalg.norm(centers - centers_new)
+            weights_err = np.linalg.norm(weights - weights_new)
+
+            np.copyto(centers, centers_new)
+            np.copyto(weights, weights_new)
+
+            err = weights_err * dk + centers_err
+
+            centers_shifted = np.vstack(
+                (centers_new[0, :, :][np.newaxis, :, :], centers_new[:-1, :, :])
+            )
+
+            sum_term_1 = np.sum(
+                np.linalg.norm(self.data - centers @ np.transpose(weights), 2, axis=1)** 2)
 
             sum_term_2 = np.sum(
                 lam * np.linalg.norm(centers_new - centers_shifted, 2, axis=1) ** 2
