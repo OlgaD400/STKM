@@ -107,7 +107,8 @@ class TKM:
         tol: float = 1e-6,
         max_iter: int = 100,
         lam: Optional[float] = 0.70,
-        init_centers: Optional[np.ndarray] = None
+        init_centers: Optional[np.ndarray] = None,
+        verbose: bool = False
     ) -> None:
         """
         Perform Time k Means algorithm and set values for TKM attributes.
@@ -121,6 +122,7 @@ class TKM:
             max_iter (int): Max number of iterations for algorithm.
             lam (float): Parameter controlling strength of constraint that cluster centers should not move over time.
             init_centers (np.ndarray): Initial centers for algorithm.
+            verbose (bool): Whether or not to print statements during convergence.
         """
         t, m, n = self.data.shape
 
@@ -174,7 +176,7 @@ class TKM:
             )
 
             sum_term_1 = np.sum(
-                np.linalg.norm(self.data - centers @ np.transpose(weights, axes=[0, 2, 1]), 2, axis=1)** 2)
+                np.linalg.norm(self.data - centers @ np.transpose(weights, axes=[0, 2, 1]), 2, axis=1)**2)
 
             sum_term_2 = np.sum(
                 lam * np.linalg.norm(centers_new - centers_shifted, 2, axis=1) ** 2
@@ -187,8 +189,9 @@ class TKM:
 
             iter_count += 1
 
-            if iter_count % 100 == 0:
-                print("Iteration", iter_count)
+            if verbose is True:
+                if iter_count % 100 == 0:
+                    print("Iteration", iter_count)
 
             if iter_count >= max_iter:
                 print("Maximum number of iterations")
