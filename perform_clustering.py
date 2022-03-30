@@ -61,13 +61,14 @@ def read_data(csv_path: str, min_size=0, max_size=3000):
     return data, clustering_data, true_labels
 
 
-def perform_clustering(clustering_data: np.array, true_labels: np.array, max_iter: int = 5000) -> np.float:
+def perform_clustering(clustering_data: np.array, true_labels: np.array, lam: float = .60, max_iter: int = 5000) -> np.float:
     """
     Perform clustering and evaluate AMI against the ground-truth long-term clusters.
 
     Args:
         clustering_data (np.array): Data to be clustered.
         true_labels (np.array): Ground truth long-term clusters.
+        lam (float): Tuning parameter
         max_iter (int): Maximum number of iterations for tkm.
 
     Returns:
@@ -80,7 +81,7 @@ def perform_clustering(clustering_data: np.array, true_labels: np.array, max_ite
     tkm = TKM(clustering_data)
     
     start_time = time.time()
-    tkm.perform_clustering(k=k, lam=.60, max_iter=max_iter)
+    tkm.perform_clustering(k=k, lam=lam, max_iter=max_iter)
     runtime = time.time() - start_time
 
 
