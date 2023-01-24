@@ -2,6 +2,11 @@
 import numpy as np
 from typing import Optional
 
+# from sklearn.cluster import kmeans_plusplus
+# from proxlib.operators import proj_csimplex
+
+import time
+
 
 def simplex_prox(z: np.ndarray, a: int) -> np.ndarray:
     """
@@ -56,8 +61,9 @@ def simplex_prox_2d(z: np.ndarray, a: float) -> np.ndarray:
     #     print('\n\n lam', lam, '\n\n')
     return np.maximum(z + lam, 0.0)
 
+
 class TKM:
-    r"""
+    """
     Create a class to perform Time K Means Clustering.
 
     Minimize the following objective function
@@ -104,11 +110,11 @@ class TKM:
     def perform_clustering(
         self,
         k: int,
-        tol: float = 1e-6,
+        tol: float = 1e-4,
         max_iter: int = 100,
         lam: Optional[float] = 0.70,
         init_centers: Optional[np.ndarray] = None,
-        verbose: bool = False
+        verbose: bool = False,
     ) -> None:
         """
         Perform Time k Means algorithm and set values for TKM attributes.
@@ -146,6 +152,7 @@ class TKM:
         )
 
         while err >= tol:
+
             data_norm = np.linalg.norm(self.data, 2, axis=1) ** 2
 
             centers_new = (self.data @ weights + n * lam * centers_shifted) / (
@@ -162,24 +169,28 @@ class TKM:
 
             weights_new = simplex_prox(weights_op_constrained, 1)
 
-
             centers_err = np.linalg.norm(centers - centers_new)
             weights_err = np.linalg.norm(weights - weights_new)
 
             np.copyto(centers, centers_new)
             np.copyto(weights, weights_new)
-
-            err = weights_err * dk + centers_err
+            err = dk * weights_err + centers_err
 
             centers_shifted = np.vstack(
                 (centers_new[0, :, :][np.newaxis, :, :], centers_new[:-1, :, :])
             )
 
             sum_term_1 = np.sum(
-                np.linalg.norm(self.data - centers @ np.transpose(weights, axes=[0, 2, 1]), 2, axis=1)**2)
+                np.linalg.norm(
+                    self.data - centers @ np.transpose(weights, axes=[0, 2, 1]),
+                    2,
+                    axis=1,
+                )
+                ** 2
+            )
 
             sum_term_2 = np.sum(
-                lam * np.linalg.norm(centers_new - centers_shifted, 2, axis=1) ** 2
+                n * lam * np.linalg.norm(centers_new - centers_shifted, 2, axis=1) ** 2
             )
 
             obj = sum_term_1 + sum_term_2
@@ -206,214 +217,6 @@ class TKM:
         self.obj_hist = obj_hist
         self.err_hist = err_hist
 
-    def perform_clustering_constant_weights(
-        self,
-        k: int,
-        tol: float = 1e-6,
-        max_iter: int = 100,
-        lam: Optional[float] = 0.70,
-        init_centers: Optional[np.ndarray] = None
-    ) -> None:
-        """
-        Perform Time k Means algorithm and set values for TKM attributes.
-
-        Sets values for predicted cluster centers, cluster membership weights, outliers, objective function values over
-        iterations, and error values over iterations.
-
-        Args:
-            k (int): Number of clusters.
-            tol (float): Error tolerance for convergence of algorithm.
-            max_iter (int): Max number of iterations for algorithm.
-            lam (float): Parameter controlling strength of constraint that cluster centers should not move over time.
-            init_centers (np.ndarray): Initial centers for algorithm.
-        """
-        t, m, n = self.data.shape
-
-        if init_centers is None:
-            centers = self.data[:, :, np.random.choice(n, k)]
-        else:
-            centers = init_centers
-
-        dk = 1.1
-
-        iter_count = 0
-        err = tol + 1.0
-
-        obj_hist = []
-        err_hist = []
-
-        weights = np.random.rand(n, k)
-
-        centers_shifted = np.vstack(
-            (centers[0, :, :][np.newaxis, :, :], centers[:-1, :, :])
-        )
-
-        while err >= tol:
-            data_norm = np.linalg.norm(self.data, 2, axis=1) ** 2
-
-            centers_new = (self.data @ weights + n * lam * centers_shifted) / (
-                np.sum(weights, axis=0)[np.newaxis, np.newaxis, :] + lam * n
-            )
-
-            centers_norm = np.linalg.norm(centers_new, 2, axis=1) ** 2
-
-            weights_op_constrained = weights - 1 / dk * np.sum((
-                data_norm[:, :, np.newaxis]
-                - 2 * np.transpose(self.data, axes=[0, 2, 1]) @ centers_new
-                + centers_norm[:, np.newaxis, :]
-            ), axis=0)
-
-            weights_new = simplex_prox_2d(weights_op_constrained, 1)
-
-
-            centers_err = np.linalg.norm(centers - centers_new)
-            weights_err = np.linalg.norm(weights - weights_new)
-
-            np.copyto(centers, centers_new)
-            np.copyto(weights, weights_new)
-
-            err = weights_err * dk + centers_err
-
-            centers_shifted = np.vstack(
-                (centers_new[0, :, :][np.newaxis, :, :], centers_new[:-1, :, :])
-            )
-
-            sum_term_1 = np.sum(
-                np.linalg.norm(self.data - centers @ np.transpose(weights), 2, axis=1)** 2)
-
-            sum_term_2 = np.sum(
-                lam * np.linalg.norm(centers_new - centers_shifted, 2, axis=1) ** 2
-            )
-
-            obj = sum_term_1 + sum_term_2
-
-            obj_hist.append(obj)
-            err_hist.append(err)
-
-            iter_count += 1
-
-            if iter_count % 100 == 0:
-                print("Iteration", iter_count)
-
-            if iter_count >= max_iter:
-                print("Maximum number of iterations")
-                self.centers = centers
-                self.weights = weights
-                self.obj_hist = obj_hist
-                self.err_hist = err_hist
-                break
-
-        self.centers = centers
-        self.weights = weights
-        self.obj_hist = obj_hist
-        self.err_hist = err_hist
-
-    def perform_clustering_weight_constraint(
-        self,
-        k: int,
-        tol: float = 1e-6,
-        max_iter: int = 100,
-        lam: Optional[float] = 0.70,
-        init_centers: Optional[np.ndarray] = None
-    ) -> None:
-        """
-        Perform Time k Means algorithm and set values for TKM attributes.
-
-        Sets values for predicted cluster centers, cluster membership weights, outliers, objective function values over
-        iterations, and error values over iterations.
-
-        Args:
-            k (int): Number of clusters.
-            tol (float): Error tolerance for convergence of algorithm.
-            max_iter (int): Max number of iterations for algorithm.
-            lam (float): Parameter controlling strength of constraint that cluster centers should not move over time.
-            init_centers (np.ndarray): Initial centers for algorithm.
-        """
-        t, m, n = self.data.shape
-
-        if init_centers is None:
-            centers = self.data[:, :, np.random.choice(n, k)]
-        else:
-            centers = init_centers
-
-        dk = 1.1
-
-        iter_count = 0
-        err = tol + 1.0
-
-        obj_hist = []
-        err_hist = []
-
-        weights = np.random.rand(t, n, k)
-
-        weights_shifted = np.vstack(
-            (weights[0, :, :][np.newaxis, :, :], weights[:-1, :, :])
-        )
-
-        while err >= tol:
-            data_norm = np.linalg.norm(self.data, 2, axis=1) ** 2
-
-            centers_new = (self.data @ weights) / (
-                np.sum(weights, axis=1)[:, np.newaxis, :]
-            )
-
-            centers_norm = np.linalg.norm(centers_new, 2, axis=1) ** 2
-
-            weights_diff = np.abs(weights - weights_shifted)
-            weights_diff = np.where(weights_diff == 0, 1e-3, weights_diff)
-
-
-            weights_op_constrained = weights - 1 / dk * (
-                data_norm[:, :, np.newaxis]
-                - 2 * np.transpose(self.data, axes=[0, 2, 1]) @ centers_new
-                + centers_norm[:, np.newaxis, :] + lam*(weights - weights_shifted)/weights_diff
-            )
-
-            weights_new = simplex_prox(weights_op_constrained, 1)
-
-
-            centers_err = np.linalg.norm(centers - centers_new)
-            weights_err = np.linalg.norm(weights - weights_new)
-
-            np.copyto(centers, centers_new)
-            np.copyto(weights, weights_new)
-
-            err = weights_err * dk + centers_err
-
-            weights_shifted = np.vstack(
-                (weights_new[0, :, :][np.newaxis, :, :], weights_new[:-1, :, :])
-            )
-
-            sum_term_1 = np.sum(
-                np.linalg.norm(self.data - centers @ np.transpose(weights, axes=[0, 2, 1]), 2, axis=1)** 2)
-
-            sum_term_2 = np.sum(
-                lam * np.abs(weights_new - weights_shifted)
-            )
-
-            obj = sum_term_1 + sum_term_2
-
-            obj_hist.append(obj)
-            err_hist.append(err)
-
-            iter_count += 1
-
-            if iter_count % 100 == 0:
-                print("Iteration", iter_count)
-
-            if iter_count >= max_iter:
-                print("Maximum number of iterations")
-                self.centers = centers
-                self.weights = weights
-                self.obj_hist = obj_hist
-                self.err_hist = err_hist
-                break
-
-        self.centers = centers
-        self.weights = weights
-        self.obj_hist = obj_hist
-        self.err_hist = err_hist
-
     def perform_clustering_log_c(
         self,
         k: int,
@@ -421,242 +224,10 @@ class TKM:
         max_iter: int = 100,
         lam: Optional[float] = 0.70,
         init_centers: Optional[np.ndarray] = None,
-        nu: Optional[float]= 1.1
+        nu: Optional[float] = 1.1,
     ) -> None:
         """
-        Perform Time k Means algorithm and set values for TKM attributes.
-
-        Sets values for predicted cluster centers, cluster membership weights, outliers, objective function values over
-        iterations, and error values over iterations.
-
-        Args:
-            k (int): Number of clusters.
-            tol (float): Error tolerance for convergence of algorithm.
-            max_iter (int): Max number of iterations for algorithm.
-            lam (float): Parameter controlling strength of constraint that cluster centers should not move over time.
-            init_centers (np.ndarray): Initial centers for algorithm.
-        """
-        t, m, n = self.data.shape
-
-        if init_centers is None:
-            centers = self.data[:, :, np.random.choice(n, k)]
-        else:
-            centers = init_centers
-
-        dk = 1.1
-        ek = 1.1*(nu +1)*n
-
-        iter_count = 0
-        err = tol + 1.0
-
-        obj_hist = []
-        err_hist = []
-
-        weights = np.random.rand(t, n, k)
-
-        centers_shifted = np.vstack(
-            (centers[0, :, :][np.newaxis, :, :], centers[:-1, :, :])
-        )
-
-        while err >= tol:
-
-            data_norm = np.linalg.norm(self.data, 2, axis=1) ** 2
-            centers_norm = np.linalg.norm(centers, 2, axis=1)**2
-
-            denominator = nu + data_norm[:, :, np.newaxis] - \
-                          2 * np.transpose(self.data, axes=[0, 2, 1]) @ centers + \
-                          centers_norm[:, np.newaxis, :]
-
-            centers_sum = np.zeros((t,m,k))
-
-            for i in range(n):
-                # numerator = 2*(self.data[:, :, i][:,:,np.newaxis]@weights[:,i,:][:, np.newaxis,:] -
-                #                centers@(weights[:,i,:][:,:, np.newaxis]) )
-                numerator = weights[:,i,:][:,np.newaxis, :] * (self.data[:,:,i][:,:,np.newaxis] - centers)
-                centers_sum += numerator/(denominator[:, i, :][:, np.newaxis, :])
-
-            centers_new = ((nu + 1)*centers_sum + ek*centers + 2*lam*centers_shifted)/(2*lam + ek)
-
-            centers_norm = np.linalg.norm(centers_new, 2, axis=1) ** 2
-
-
-            weights_op_constrained = weights - (nu+1) / (2*dk) * np.log(
-                    data_norm[:, :, np.newaxis]
-                    - 2 * np.transpose(self.data, axes=[0, 2, 1]) @ centers_new
-                    + centers_norm[:, np.newaxis, :] + nu)
-
-            weights_new = simplex_prox(weights_op_constrained, 1)
-
-
-            centers_err = np.linalg.norm(centers - centers_new)
-            weights_err = np.linalg.norm(weights - weights_new)
-
-            np.copyto(centers, centers_new)
-            np.copyto(weights, weights_new)
-
-            err = weights_err * dk + centers_err
-
-            centers_shifted = np.vstack(
-                (centers_new[0, :, :][np.newaxis, :, :], centers_new[:-1, :, :]))
-
-            sum_term_1 = np.sum(weights_new * (nu+1)/2 * np.log(
-                    data_norm[:, :, np.newaxis]
-                    - 2 * np.transpose(self.data, axes=[0, 2, 1]) @ centers_new
-                    + centers_norm[:, np.newaxis, :] + nu))
-
-            sum_term_2 = np.sum(
-                lam * np.linalg.norm(centers_new - centers_shifted, 2, axis=1) ** 2
-            )
-
-
-            obj = sum_term_1 + sum_term_2
-
-            obj_hist.append(obj)
-            err_hist.append(err)
-
-            iter_count += 1
-
-            if iter_count % 100 == 0:
-                print("Iteration", iter_count)
-
-            if iter_count >= max_iter:
-                print("Maximum number of iterations")
-                self.centers = centers
-                self.weights = weights
-                self.obj_hist = obj_hist
-                self.err_hist = err_hist
-                break
-
-        self.centers = centers
-        self.weights = weights
-        self.obj_hist = obj_hist
-        self.err_hist = err_hist
-
-    def perform_clustering_exp_c(
-        self,
-        k: int,
-        tol: float = 1e-6,
-        max_iter: int = 100,
-        lam: Optional[float] = 0.70,
-        init_centers: Optional[np.ndarray] = None
-    ) -> None:
-        """
-        Perform Time k Means algorithm and set values for TKM attributes.
-
-        Sets values for predicted cluster centers, cluster membership weights, outliers, objective function values over
-        iterations, and error values over iterations.
-
-        Args:
-            k (int): Number of clusters.
-            tol (float): Error tolerance for convergence of algorithm.
-            max_iter (int): Max number of iterations for algorithm.
-            lam (float): Parameter controlling strength of constraint that cluster centers should not move over time.
-            init_centers (np.ndarray): Initial centers for algorithm.
-        """
-        t, m, n = self.data.shape
-
-        if init_centers is None:
-            centers = self.data[:, :, np.random.choice(n, k)]
-        else:
-            centers = init_centers
-
-        dk = 1.1
-        ek = 1.1*2*n
-
-        iter_count = 0
-        err = tol + 1.0
-
-        obj_hist = []
-        err_hist = []
-
-        weights = np.random.rand(t, n, k)
-
-        centers_shifted = np.vstack(
-            (centers[0, :, :][np.newaxis, :, :], centers[:-1, :, :])
-        )
-
-        while err >= tol:
-            data_norm = np.linalg.norm(self.data, 2, axis=1)**2
-            centers_norm = np.linalg.norm(centers, 2, axis=1)**2
-
-            exponent = np.exp(-data_norm[:, :, np.newaxis] + 2 * np.transpose(self.data, axes=[0, 2, 1]) @ centers \
-                       - centers_norm[:, np.newaxis, :])
-
-            product = np.zeros((t, m, k))
-
-            for i in range(n):
-                product += -2*weights[:,i,:][:,np.newaxis, :] * \
-                           (self.data[:,:,i][:,:,np.newaxis] - centers) *\
-                           exponent[:, i, :][:, np.newaxis, :]
-
-            centers_new = (product + ek * centers + 2 * lam * centers_shifted) / (2 * lam + ek)
-
-            centers_norm = np.linalg.norm(centers_new, 2, axis=1) ** 2
-
-            weights_op_constrained = weights - 1 / dk * np.exp(-
-                data_norm[:, :, np.newaxis]
-                + 2 * np.transpose(self.data, axes=[0, 2, 1]) @ centers_new
-                - centers_norm[:, np.newaxis, :]
-            )
-
-            weights_new = simplex_prox(weights_op_constrained, 1)
-
-
-            centers_err = np.linalg.norm(centers - centers_new)
-            weights_err = np.linalg.norm(weights - weights_new)
-
-            np.copyto(centers, centers_new)
-            np.copyto(weights, weights_new)
-
-            err = weights_err * dk + centers_err
-
-            centers_shifted = np.vstack(
-                (centers_new[0, :, :][np.newaxis, :, :], centers_new[:-1, :, :])
-            )
-
-            sum_term_1 = np.sum(np.exp(-1*(
-                np.linalg.norm(self.data - centers @ np.transpose(weights, axes=[0, 2, 1]), 2, axis=1)** 2)))
-
-
-            sum_term_2 = np.sum(
-                lam * np.linalg.norm(centers_new - centers_shifted, 2, axis=1) ** 2
-            )
-
-            obj = sum_term_1 + sum_term_2
-
-            obj_hist.append(obj)
-            err_hist.append(err)
-
-            iter_count += 1
-
-            if iter_count % 100 == 0:
-                print("Iteration", iter_count)
-
-            if iter_count >= max_iter:
-                print("Maximum number of iterations")
-                self.centers = centers
-                self.weights = weights
-                self.obj_hist = obj_hist
-                self.err_hist = err_hist
-                break
-
-        self.centers = centers
-        self.weights = weights
-        self.obj_hist = obj_hist
-        self.err_hist = err_hist
-
-    def perform_clustering_center_derivative(
-            self,
-            k: int,
-            tol: float = 1e-6,
-            max_iter: int = 100,
-            lam: Optional[float] = 0.70,
-            init_centers: Optional[np.ndarray] = None,
-            nu: Optional[float] = 1.1,
-            gamma: Optional[float] = 1.1
-    ) -> None:
-        """
-        Perform Time k Means algorithm and set values for TKM attributes.
+        Perform Time k Means algorithm for an objective function that is robust to outliers and noise.
 
         Sets values for predicted cluster centers, cluster membership weights, outliers, objective function values over
         iterations, and error values over iterations.
@@ -690,37 +261,40 @@ class TKM:
             (centers[0, :, :][np.newaxis, :, :], centers[:-1, :, :])
         )
 
-        derivative_mat = np.diag(-1*np.ones(k-1), k=-1) + np.diag(np.ones(k-1), k=1)
-        derivative_mat[0, 0] = -1
-        derivative_mat[k-1, k-1] = 1
-
-        inverse_mat = np.linalg.inv(2*lam*np.eye(k) + ek*np.eye(k) + gamma * derivative_mat.T@derivative_mat)
-
         while err >= tol:
 
             data_norm = np.linalg.norm(self.data, 2, axis=1) ** 2
             centers_norm = np.linalg.norm(centers, 2, axis=1) ** 2
 
-            denominator = nu + data_norm[:, :, np.newaxis] - \
-                          2 * np.transpose(self.data, axes=[0, 2, 1]) @ centers + \
-                          centers_norm[:, np.newaxis, :]
+            denominator = (
+                nu
+                + data_norm[:, :, np.newaxis]
+                - 2 * np.transpose(self.data, axes=[0, 2, 1]) @ centers
+                + centers_norm[:, np.newaxis, :]
+            )
 
             centers_sum = np.zeros((t, m, k))
 
             for i in range(n):
-                numerator = weights[:, i, :][:, np.newaxis, :] * (self.data[:, :, i][:, :, np.newaxis] - centers)
+                # numerator = 2*(self.data[:, :, i][:,:,np.newaxis]@weights[:,i,:][:, np.newaxis,:] -
+                #                centers@(weights[:,i,:][:,:, np.newaxis]) )
+                numerator = weights[:, i, :][:, np.newaxis, :] * (
+                    self.data[:, :, i][:, :, np.newaxis] - centers
+                )
                 centers_sum += numerator / (denominator[:, i, :][:, np.newaxis, :])
 
-            right_side = ((nu + 1) * centers_sum + ek * centers + 2 * lam * centers_shifted)
-            centers_new = right_side@inverse_mat
-            # centers_new = np.transpose(centers_new, axes = [0,2,1])
+            centers_new = (
+                (nu + 1) * centers_sum + ek * centers + 2 * lam * centers_shifted
+            ) / (2 * lam + ek)
 
             centers_norm = np.linalg.norm(centers_new, 2, axis=1) ** 2
 
             weights_op_constrained = weights - (nu + 1) / (2 * dk) * np.log(
                 data_norm[:, :, np.newaxis]
                 - 2 * np.transpose(self.data, axes=[0, 2, 1]) @ centers_new
-                + centers_norm[:, np.newaxis, :] + nu)
+                + centers_norm[:, np.newaxis, :]
+                + nu
+            )
 
             weights_new = simplex_prox(weights_op_constrained, 1)
 
@@ -733,132 +307,26 @@ class TKM:
             err = weights_err * dk + centers_err
 
             centers_shifted = np.vstack(
-                (centers_new[0, :, :][np.newaxis, :, :], centers_new[:-1, :, :]))
-
-            sum_term_1 = np.sum(weights_new * (nu + 1) / 2 * np.log(
-                data_norm[:, :, np.newaxis]
-                - 2 * np.transpose(self.data, axes=[0, 2, 1]) @ centers_new
-                + centers_norm[:, np.newaxis, :] + nu))
-
-            sum_term_2 = np.sum(
-                lam * np.linalg.norm(centers_new - centers_shifted, 2, axis=1) ** 2
+                (centers_new[0, :, :][np.newaxis, :, :], centers_new[:-1, :, :])
             )
 
-            sum_term_3 = np.sum(gamma/2 * np.linalg.norm(derivative_mat@np.transpose(centers_new, axes = [0, 2, 1]))**2)
-
-            obj = sum_term_1 + sum_term_2 + sum_term_3
-
-            obj_hist.append(obj)
-            err_hist.append(err)
-
-            iter_count += 1
-
-            if iter_count % 100 == 0:
-                print("Iteration", iter_count)
-
-            if iter_count >= max_iter:
-                print("Maximum number of iterations")
-                self.centers = centers
-                self.weights = weights
-                self.obj_hist = obj_hist
-                self.err_hist = err_hist
-                break
-
-        self.centers = centers
-        self.weights = weights
-        self.obj_hist = obj_hist
-        self.err_hist = err_hist
-
-    def perform_clustering_center_derivative_2(
-            self,
-            k: int,
-            tol: float = 1e-6,
-            max_iter: int = 100,
-            lam: Optional[float] = 0.70,
-            init_centers: Optional[np.ndarray] = None,
-            nu: Optional[float] = 1.1,
-            gamma: Optional[float] = 1.1
-    ) -> None:
-        """
-        Perform Time k Means algorithm and set values for TKM attributes.
-
-        Sets values for predicted cluster centers, cluster membership weights, outliers, objective function values over
-        iterations, and error values over iterations.
-
-        Args:
-            k (int): Number of clusters.
-            tol (float): Error tolerance for convergence of algorithm.
-            max_iter (int): Max number of iterations for algorithm.
-            lam (float): Parameter controlling strength of constraint that cluster centers should not move over time.
-            init_centers (np.ndarray): Initial centers for algorithm.
-        """
-        t, m, n = self.data.shape
-
-        if init_centers is None:
-            centers = self.data[:, :, np.random.choice(n, k)]
-        else:
-            centers = init_centers
-
-        dk = 1.1
-
-        iter_count = 0
-        err = tol + 1.0
-
-        obj_hist = []
-        err_hist = []
-
-        weights = np.random.rand(t, n, k)
-
-        centers_shifted = np.vstack(
-            (centers[0, :, :][np.newaxis, :, :], centers[:-1, :, :])
-        )
-
-        derivative_mat = np.diag(-1*np.ones(k-1), k=-1) + np.diag(np.ones(k-1), k=1)
-        derivative_mat[0, 0] = -1
-        derivative_mat[k-1, k-1] = 1
-
-        while err >= tol:
-
-            derivative_c = np.transpose(derivative_mat.T@derivative_mat@np.transpose(centers, axes=[0, 2, 1]), axes=[0, 2, 1])
-
-            centers_new = centers - 1/dk * (-2*self.data@weights +
-                                            2*np.sum(weights, axis=1)[:, np.newaxis, :]*centers +
-                                            2*lam*n*(centers - centers_shifted) +
-                                            2*gamma*n*derivative_c)
-
-            data_norm = np.linalg.norm(self.data, 2, axis=1) ** 2
-            centers_norm = np.linalg.norm(centers_new, 2, axis=1) ** 2
-
-            weights_op_constrained = weights - 1 / dk * (
+            sum_term_1 = np.sum(
+                weights_new
+                * (nu + 1)
+                / 2
+                * np.log(
                     data_norm[:, :, np.newaxis]
                     - 2 * np.transpose(self.data, axes=[0, 2, 1]) @ centers_new
                     + centers_norm[:, np.newaxis, :]
+                    + nu
+                )
             )
-
-            weights_new = simplex_prox(weights_op_constrained, 1)
-
-            centers_err = np.linalg.norm(centers - centers_new)
-            weights_err = np.linalg.norm(weights - weights_new)
-
-            np.copyto(centers, centers_new)
-            np.copyto(weights, weights_new)
-
-            err = weights_err * dk + centers_err
-
-            centers_shifted = np.vstack(
-                (centers_new[0, :, :][np.newaxis, :, :], centers_new[:-1, :, :]))
-
-            sum_term_1 = np.sum(
-                np.linalg.norm(self.data - centers @ np.transpose(weights, axes=[0, 2, 1]), 2, axis=1) ** 2)
-
 
             sum_term_2 = np.sum(
                 lam * np.linalg.norm(centers_new - centers_shifted, 2, axis=1) ** 2
             )
 
-            sum_term_3 = np.sum(gamma * np.linalg.norm(derivative_mat@np.transpose(centers_new, axes=[0, 2, 1]))**2)
-
-            obj = sum_term_1 + sum_term_2 + sum_term_3
+            obj = sum_term_1 + sum_term_2
 
             obj_hist.append(obj)
             err_hist.append(err)
@@ -880,4 +348,3 @@ class TKM:
         self.weights = weights
         self.obj_hist = obj_hist
         self.err_hist = err_hist
-

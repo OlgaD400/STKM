@@ -1,5 +1,5 @@
 from TKM import TKM
-from TKM_long_term_clusters import find_long_term_clusters, find_k_clusters, similarity_matrix
+from TKM_long_term_clusters import find_optimal_threshold
 from sklearn.metrics.cluster import adjusted_mutual_info_score
 from sklearn.cluster import KMeans, DBSCAN
 import time
@@ -7,8 +7,12 @@ import time
 import numpy as np
 import pandas as pd
 
+from typing import Tuple, List
 
-def read_data(csv_path: str, min_size=0, max_size=3000):
+
+def read_data(
+    csv_path: str, min_size: int = 0, max_size: int = 3000
+) -> Tuple(pd.DataFrame, np.ndarray, List):
     """
     Read the data from the csv file.
 
@@ -21,7 +25,7 @@ def read_data(csv_path: str, min_size=0, max_size=3000):
 
     Returns:
         data (pd.DataFrame): The dataframe from the csv file.
-        clustering_data (np.array): The data formatted for trimmed k-means clustering,
+        clustering_data (np.ndarray): The data formatted for trimmed k-means clustering,
             shaped txmxn.
         true_labels (List): The ground truth long-term labels of each point.
     """
@@ -31,37 +35,42 @@ def read_data(csv_path: str, min_size=0, max_size=3000):
     clustering_data = None
     true_labels = None
 
-    dataset_size = data['id'].nunique()*data['frame'].nunique()
+    dataset_size = data["id"].nunique() * data["frame"].nunique()
 
     if dataset_size in range(min_size, max_size):
-        data['x'] = (data['x'] - data['x'].min()) / (data['x'].max() - data['x'].min())
-        data['y'] = (data['y'] - data['y'].min()) / (data['y'].max() - data['y'].min())
+        data["x"] = (data["x"] - data["x"].min()) / (data["x"].max() - data["x"].min())
+        data["y"] = (data["y"] - data["y"].min()) / (data["y"].max() - data["y"].min())
 
         frame_positions = []
 
-        for frame in data['frame'].unique():
-            frame_data = data[data['frame'] == frame]
+        for frame in data["frame"].unique():
+            frame_data = data[data["frame"] == frame]
 
-            n_id = frame_data['id'].nunique()
+            n_id = frame_data["id"].nunique()
 
             frame_data["id_cumcounts"] = frame_data.groupby("id").cumcount()
 
             frame_data.sort_values(["id_cumcounts", "id"], inplace=True)
 
-            frame_positions.append(frame_data[['x', 'y']].to_numpy()[:n_id])
+            frame_positions.append(frame_data[["x", "y"]].to_numpy()[:n_id])
 
-        true_labels = frame_data['cid'].to_list()[:n_id]
+        true_labels = frame_data["cid"].to_list()[:n_id]
 
         try:
             clustering_data = np.transpose(np.array(frame_positions), axes=[0, 2, 1])
 
         except:
-            print(csv_path, ' unable to be processed')
+            print(csv_path, " unable to be processed")
 
     return data, clustering_data, true_labels
 
 
-def perform_clustering(clustering_data: np.array, true_labels: np.array, lam: float = .60, max_iter: int = 5000) -> np.float:
+def perform_clustering(
+    clustering_data: np.array,
+    true_labels: np.array,
+    lam: float = 0.60,
+    max_iter: int = 5000,
+) -> Tuple(np.float, np.float, np.float, np.ndarray):
     """
     Perform clustering and evaluate AMI against the ground-truth long-term clusters.
 
@@ -73,50 +82,21 @@ def perform_clustering(clustering_data: np.array, true_labels: np.array, lam: fl
 
     Returns:
         ami (float): Adjusted mutual info score.
+        tot_ami (float): Total Adjusted mutual info score.
+        runtime (float): Runtime of the clustering process.
+        tkm.weights (np.ndarray): Weight assignment matrix containing assingment of each point to a cluster at every time step.
     """
-
-    t, m, n = clustering_data.shape
     k = len(np.unique(true_labels))
 
     tkm = TKM(clustering_data)
-    
+
     start_time = time.time()
     tkm.perform_clustering(k=k, lam=lam, max_iter=max_iter)
     runtime = time.time() - start_time
 
-
-    criteria_mat = similarity_matrix(tkm.weights)
-
-    ltc = find_k_clusters(k=k, criteria_mat=criteria_mat, threshold_change=.05)
-
-    if ltc is None:
-        thresholds = np.linspace(.10, .90, 9)
-        ami = 0
-
-        for threshold in thresholds:
-            ltc = find_long_term_clusters(similarity_threshold=threshold, criteria_mat=criteria_mat)
-
-            pred_labels = np.zeros(n)
-
-            for i, cluster in enumerate(ltc):
-                pred_labels[cluster] = i
-
-            current_ami = adjusted_mutual_info_score(true_labels, pred_labels)
-
-            if current_ami > ami:
-                ami = current_ami
-
-    else:
-        pred_labels = np.zeros(n)
-
-        for i, cluster in enumerate(ltc):
-            pred_labels[cluster] = i
-
-        ami = adjusted_mutual_info_score(true_labels, pred_labels)
-
-    assignments = np.argmax(tkm.weights, axis=2).T
-
-    tot_ami = adjusted_mutual_info_score(np.tile(true_labels, t), (assignments.T).reshape(t*n))
+    ami, tot_ami = find_optimal_threshold(
+        weights=tkm.weights, k=k, true_labels=true_labels
+    )
 
     return ami, tot_ami, runtime, tkm.weights
 
@@ -138,20 +118,22 @@ def k_means(clustering_data: np.array, true_labels: np.array) -> np.float:
 
     weights = []
     for time in range(t):
-        weights.append(KMeans(n_clusters=k).fit_predict(clustering_data[time, :,:].T))
+        weights.append(KMeans(n_clusters=k).fit_predict(clustering_data[time, :, :].T))
 
     weights = np.array(weights).T
 
     criteria_mat = similarity_matrix(weights)
 
-    ltc = find_k_clusters(k=k, criteria_mat=criteria_mat, threshold_change=.05)
+    ltc = find_k_clusters(k=k, criteria_mat=criteria_mat, threshold_change=0.05)
 
     if ltc is None:
-        thresholds = np.linspace(.10, .90, 9)
+        thresholds = np.linspace(0.10, 0.90, 9)
         ami = 0
 
         for threshold in thresholds:
-            ltc = find_long_term_clusters(similarity_threshold=threshold, criteria_mat=criteria_mat)
+            ltc = find_long_term_clusters(
+                similarity_threshold=threshold, criteria_mat=criteria_mat
+            )
 
             pred_labels = np.zeros(n)
 
@@ -191,20 +173,22 @@ def dbscan(clustering_data: np.array, true_labels: np.array) -> np.float:
 
     weights = []
     for time in range(t):
-        weights.append(DBSCAN(eps=0.5).fit_predict(clustering_data[time, :,:].T))
+        weights.append(DBSCAN(eps=0.5).fit_predict(clustering_data[time, :, :].T))
 
     weights = np.array(weights).T
 
     criteria_mat = similarity_matrix(weights)
 
-    ltc = find_k_clusters(k=k, criteria_mat=criteria_mat, threshold_change=.05)
+    ltc = find_k_clusters(k=k, criteria_mat=criteria_mat, threshold_change=0.05)
 
     if ltc is None:
-        thresholds = np.linspace(.10, .90, 9)
+        thresholds = np.linspace(0.10, 0.90, 9)
         ami = 0
 
         for threshold in thresholds:
-            ltc = find_long_term_clusters(similarity_threshold=threshold, criteria_mat=criteria_mat)
+            ltc = find_long_term_clusters(
+                similarity_threshold=threshold, criteria_mat=criteria_mat
+            )
 
             pred_labels = np.zeros(n)
 
@@ -225,4 +209,3 @@ def dbscan(clustering_data: np.array, true_labels: np.array) -> np.float:
         ami = adjusted_mutual_info_score(true_labels, pred_labels)
 
     return ami
-
