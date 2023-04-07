@@ -6,7 +6,8 @@ from TKM_long_term_clusters import find_final_label_sc
 
 def correlated_random_walk(intra_cluster_correlations: np.ndarray, 
                            cluster_populations: np.ndarray, 
-                           timesteps: int) -> np.ndarray:
+                           timesteps: int,
+                           m: int =2) -> np.ndarray:
     
     """
     Generate the coordinates of a correlated random walk where 
@@ -44,26 +45,31 @@ def correlated_random_walk(intra_cluster_correlations: np.ndarray,
         correlation_matrix[prev_index:next_index, prev_index:next_index] = block
         prev_index = next_index
     rng = np.random.default_rng()
-    y = rng.multivariate_normal(np.zeros(sum(cluster_populations)), correlation_matrix, size=timesteps)
-    coordinates = np.vstack((np.zeros(sum(cluster_populations)),np.cumsum(y, axis = 0)))
-
+    y = rng.multivariate_normal(np.zeros(sum(cluster_populations)), correlation_matrix, size=(timesteps,m))
+    
+    coordinates = np.vstack((np.zeros((1, m, sum(cluster_populations))),np.cumsum(y, axis = 0)))
     return coordinates
 
 T = 100
 cluster_populations = [2,2]
-intra_cluster_correlations = [.8,.8,]
-coordinates = correlated_random_walk(intra_cluster_correlations = intra_cluster_correlations, cluster_populations=cluster_populations, timesteps = T)
+intra_cluster_correlations = [.9,.7,]
+coordinates = correlated_random_walk(intra_cluster_correlations = intra_cluster_correlations, 
+                                     cluster_populations=cluster_populations, timesteps = T,
+                                     m = 2)
 colors = ['r', 'b', 'g']
 
+print(coordinates.shape)
 plt.figure()
 prev_index = 0
 for index, val in enumerate(cluster_populations):
     next_index = prev_index + val
     for i in range(prev_index, next_index):
-        plt.plot(np.arange(T+1), coordinates[:,i], c = colors[index])
+        plt.scatter(coordinates[0,0, i], coordinates[0,1,i], c = 'g')
+        plt.scatter(coordinates[-1,0, i], coordinates[-1,1,i], c = 'k')
+        plt.plot(coordinates[:,0, i], coordinates[:,1,i], c = colors[index])
     prev_index = next_index
 
-tkm = TKM(coordinates[:, np.newaxis,:])
+tkm = TKM(coordinates)
 tkm.perform_clustering(k=3, lam=.80, max_iter=500)
 
 ltc = find_final_label_sc(tkm.weights, k = len(cluster_populations))
