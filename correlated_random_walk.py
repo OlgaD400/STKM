@@ -55,18 +55,32 @@ cluster_populations = [2,2]
 intra_cluster_correlations = [.9,.7,]
 coordinates = correlated_random_walk(intra_cluster_correlations = intra_cluster_correlations, 
                                      cluster_populations=cluster_populations, timesteps = T,
-                                     m = 2)
+                                     m = 1)
 colors = ['r', 'b', 'g']
 
 print(coordinates.shape)
+
+##### Figure for 2D
+# plt.figure()
+# prev_index = 0
+# for index, val in enumerate(cluster_populations):
+#     next_index = prev_index + val
+#     for i in range(prev_index, next_index):
+#         plt.scatter(coordinates[0,0, i], coordinates[0,1,i], c = 'g')
+#         plt.scatter(coordinates[-1,0, i], coordinates[-1,1,i], c = 'k')
+#         plt.plot(coordinates[:,0, i], coordinates[:,1,i], c = colors[index])
+#     prev_index = next_index
+
+
+###### Figure for 1D
 plt.figure()
 prev_index = 0
 for index, val in enumerate(cluster_populations):
     next_index = prev_index + val
     for i in range(prev_index, next_index):
-        plt.scatter(coordinates[0,0, i], coordinates[0,1,i], c = 'g')
-        plt.scatter(coordinates[-1,0, i], coordinates[-1,1,i], c = 'k')
-        plt.plot(coordinates[:,0, i], coordinates[:,1,i], c = colors[index])
+        plt.scatter(0, coordinates[0,0,i], c = 'g')
+        plt.scatter(T+1, coordinates[-1,0,i], c = 'k')
+        plt.plot(np.arange(T+1), coordinates[:,0,i], c = colors[index])
     prev_index = next_index
 
 tkm = TKM(coordinates)
