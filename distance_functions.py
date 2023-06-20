@@ -22,7 +22,6 @@ def temporal_graph_distance(connectivity_matrix):
             #If there are no np.infs, there's nothing to update
             if (len(connections)>0) & (len(ind_to_update)>0):
                 if len(connections)>1:
-                    print(row, next_slice[connections,ind_to_update])
                     connections_distance = np.min(next_slice[connections,ind_to_update], axis = 0) + 1
                 else:
                     connections_distance = next_slice[connections,ind_to_update] + 1
