@@ -24,14 +24,14 @@ def temporal_graph_distance(connectivity_matrix):
                 if len(connections)>1:
                     # print(next_slice[connections, :])
                     # print(next_slice[connections,ind_to_update], '\n')
-                    # connections_distance = np.min(next_slice[connections,ind_to_update], axis = 0) + 1
-                    connections_distance = np.min(next_slice[connections,:], axis = 0) + 1
+                    connections_distance = np.min(next_slice[connections,:][:,ind_to_update], axis = 0) + 1
+                    # connections_distance = np.min(next_slice[connections,:], axis = 0) + 1
 
                 else:
-                    connections_distance = next_slice[connections,:] + 1
-                slice[row,:] = np.minimum(slice[row], connections_distance)
-                #     connections_distance = next_slice[connections,ind_to_update] + 1
-                # slice[row, ind_to_update] = np.minimum(slice[row, ind_to_update], connections_distance)
+                #     connections_distance = next_slice[connections,:] + 1
+                # slice[row,:] = np.minimum(slice[row], connections_distance)
+                    connections_distance = next_slice[connections,:][:,ind_to_update] + 1
+                slice[row, ind_to_update] = np.minimum(slice[row, ind_to_update], connections_distance)
             else: 
                 continue
     
