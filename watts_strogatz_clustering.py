@@ -8,7 +8,7 @@ from graph_clustering_functions import STGKM
 n = 8
 t = 5
 
-WS = WattsStrogatz(n = n, q = 3, probability = .30)
+WS = WattsStrogatz(n = n, q = 2, probability = .20)
 connectivity_matrix = np.zeros((t, n, n))
 
 for time in range(t):
@@ -32,6 +32,7 @@ total_membership = np.zeros((t, n))
 total_membership[0] = previous_members
 
 print('starting centers', current_centers)
+print('starting_membership', previous_members)
 
 for time in range(1,t):
      current_distance = penalized_distance[time]
