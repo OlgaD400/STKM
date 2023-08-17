@@ -1,15 +1,14 @@
 from watts_strogatz import WattsStrogatz
 from distance_functions import temporal_graph_distance
 from TKM_long_term_clusters import find_final_label_sc
-from temporal_graph_script import penalize_distance, first_kmeans, next_assignment
 import numpy as np
 import matplotlib.pyplot as plt
+from graph_clustering_functions import STGKM
 
 n = 8
 t = 5
 
 WS = WattsStrogatz(n = n, q = 3, probability = .30)
-
 connectivity_matrix = np.zeros((t, n, n))
 
 for time in range(t):
@@ -20,10 +19,12 @@ for time in range(t):
 
 #########################
 distance_matrix = temporal_graph_distance(connectivity_matrix=connectivity_matrix)
-# print(distance_matrix)
 
-penalized_distance = penalize_distance(distance_matrix = distance_matrix, penalty = 3)
-previous_members, current_centers = first_kmeans(distance_matrix==penalized_distance, k=2)
+stgkm = STGKM (distance_matrix=distance_matrix, penalty = 3, max_drift = 1, k = 2)
+
+
+penalized_distance = stgkm.penalize_distance()
+previous_members, current_centers = stgkm.first_kmeans()
 
 previous_distance = penalized_distance[0]
 
@@ -34,8 +35,8 @@ print('starting centers', current_centers)
 
 for time in range(1,t):
      current_distance = penalized_distance[time]
-     new_members, new_centers = next_assignment(current_centers= current_centers, previous_distance = previous_distance, 
-                     current_distance = current_distance, max_drift = 1)
+     new_members, new_centers = stgkm.next_assignment(current_centers= current_centers, previous_distance = previous_distance, 
+                     current_distance = current_distance)
      
      previous_distance = current_distance.copy()
      current_centers = list(new_centers).copy()
