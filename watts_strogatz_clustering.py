@@ -8,7 +8,7 @@ from graph_clustering_functions import STGKM
 n = 8
 t = 5
 
-WS = WattsStrogatz(n = n, q = 2, probability = .20)
+WS = WattsStrogatz(n = n, q = 3, probability = .40)
 connectivity_matrix = np.zeros((t, n, n))
 
 for time in range(t):

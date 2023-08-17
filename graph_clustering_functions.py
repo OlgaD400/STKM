@@ -52,7 +52,13 @@ class STGKM():
         #Find all vertices that are within max_drift distance of each current center        
         center_connections = [np.where(previous_distance[center,:] <= self.max_drift)[0] for center in current_centers]
         
-        min_sum = np.sum(current_distance[current_centers,:])
+        #Preference to keep cluster centers the same
+        center_distances = current_distance[current_centers, :]
+        current_membership = np.argmin(center_distances, axis = 0)        
+        current_members = [np.where(current_membership == cluster)[0] for cluster in range(self.k)]
+        min_sum = np.sum([np.sum(current_distance[center, members]) for center, members in zip(current_centers,current_members)])
+        final_members = current_membership
+        final_centers = current_centers
 
         for center_combination in itertools.product(*center_connections):
             #all chosen centers are unique
@@ -68,7 +74,7 @@ class STGKM():
                 
                 total_sum = np.sum([np.sum(current_distance[center, members]) for center, members in zip(center_combination,cluster_members)])
                 #Return centers with smallest distances from their members
-
+                
                 if total_sum < min_sum:
                     final_centers = center_combination
                     final_members = membership
@@ -79,16 +85,16 @@ class STGKM():
     def run_stgkm(self):
         t,n,_ = self.distance_matrix.shape
         penalized_distance = self.penalize_distance()
-        previous_members, current_centers = self.first_kmeans()
+        current_members, current_centers = self.first_kmeans()
 
         previous_distance = penalized_distance[0]
 
-        self.full_assignments[0] = previous_members
+        self.full_assignments[0] = current_members
         self.full_centers[0] = current_centers
 
         for time in range(1,t):
             current_distance = penalized_distance[time]
-            new_members, new_centers = self.next_assignment(current_centers= current_centers, previous_distance = previous_distance, 
+            new_members, new_centers = self.next_assignment(current_centers= current_centers, current_membership = current_members, previous_distance = previous_distance, 
                             current_distance = current_distance)
             
             self.full_centers[time] = new_centers
