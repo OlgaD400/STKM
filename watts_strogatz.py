@@ -45,7 +45,7 @@ class WattsStrogatz:
                 new_node = random.choice(nds)
                 self.g.add_edge(u, new_node)
 
-        return nx.adjacency_matrix(self.g, nodelist = range(8))
+        return nx.adjacency_matrix(self.g, nodelist = range(self.n))
 
 # WS = WattsStrogatz(n = 8, q = 2, probability = .20)
 
