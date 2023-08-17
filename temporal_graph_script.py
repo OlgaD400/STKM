@@ -2,6 +2,7 @@ import numpy as np
 from distance_functions import temporal_graph_distance
 from TKM_long_term_clusters import find_final_label_sc
 import itertools
+from graph_clustering_functions import STGKM
 
 def test_temporal_graph_distance():
         """
@@ -157,85 +158,7 @@ def assign_vertices(distance_matrix: np.ndarray, center_vertices: np.ndarray):
 #penalty for not being connected
 #maximum drift between cluster centers
 
-def penalize_distance(distance_matrix, penalty):
-    penalized_distance = np.where(distance_matrix == np.inf, penalty, distance_matrix)
-    return penalized_distance
+stgkm = STGKM(distance_matrix = distance_matrix, penalty = 3, max_drift = 1, k = 2)
+stgkm.run_stgkm()
+print(stgkm.ltc)
 
-def first_kmeans(init_matrix, k):
-    init_centers = np.argsort(np.sum(init_matrix, axis =1))[:k]
-
-    centers = init_centers.copy()
-
-    for iter in range(10):
-        #assign each point to its closest cluster center
-        center_distances = init_matrix[centers, :]
-        membership = np.argmin(center_distances, axis =0)
-
-        #reassign centers based on new membership 
-        for cluster in range(k):
-                members = np.where(membership == cluster)[0]
-
-                member_distances = np.sum(init_matrix[members,:][:, members], axis = 0)
-                
-                center_k = members[np.argmin(member_distances)]
-
-                centers[cluster] = center_k     
-    
-    return membership, centers
-
-
-def next_assignment(current_centers, previous_distance, current_distance, max_drift):
-      #Find all vertices that are within max_drift distance of each current center
-      k = len(current_centers)
-     
-      center_connections = [np.where(previous_distance[center,:] <= max_drift)[0] for center in current_centers]
-    
-      min_sum = np.sum(current_distance[current_centers,:])
-
-      for center_combination in itertools.product(*center_connections):
-        #all chosen centers are unique
-        if len(set(center_combination)) == k:
-            #This will iterate through every possible subset of centers
-        
-            #Assign each point to its closest cluster center 
-            center_distances = current_distance[center_combination, :]
-            membership = np.argmin(center_distances, axis = 0)
-            
-            #get total sum of distances from vertex in cluster
-            cluster_members = [np.where(membership == cluster)[0] for cluster in range(k)]
-            
-            total_sum = np.sum([np.sum(current_distance[center, mem
-                                                        bers]) for center, members in zip(center_combination,cluster_members)])
-            #Return centers with smallest distances from their members
-            if total_sum < min_sum:
-                final_centers = center_combination
-                final_members = membership
-        
-      return final_members, final_centers
-
-t,n,_ = distance_matrix.shape
-penalized_distance = penalize_distance(distance_matrix = distance_matrix, penalty = 3)
-previous_members, current_centers = first_kmeans(init_matrix=penalized_distance[0], k=2)
-
-previous_distance = penalized_distance[0]
-
-print('chosen centers', current_centers, '\n\n')
-
-total_membership = np.zeros((t, n))
-total_membership[0] = previous_members
-
-for time in range(1,t):
-     current_distance = penalized_distance[time]
-     new_members, new_centers = next_assignment(current_centers= current_centers, previous_distance = previous_distance, 
-                     current_distance = current_distance, max_drift = 1)
-     
-     previous_distance = current_distance.copy()
-     current_centers = list(new_centers).copy()
-
-     total_membership[time] = new_members
-     print(new_members)
-     print(current_centers)
-
-ltc = find_final_label_sc(weights = total_membership.T, k = 2)
-print('ltc', ltc)
-      

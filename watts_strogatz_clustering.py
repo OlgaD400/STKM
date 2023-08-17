@@ -1,0 +1,52 @@
+from watts_strogatz import WattsStrogatz
+from distance_functions import temporal_graph_distance
+from TKM_long_term_clusters import find_final_label_sc
+from temporal_graph_script import penalize_distance, first_kmeans, next_assignment
+import numpy as np
+import matplotlib.pyplot as plt
+
+n = 8
+t = 5
+
+WS = WattsStrogatz(n = n, q = 3, probability = .30)
+
+connectivity_matrix = np.zeros((t, n, n))
+
+for time in range(t):
+    connectivity = WS.update()
+    connectivity_matrix[time, :, :] = connectivity.toarray()
+    WS.visualize()
+    plt.show()
+
+#########################
+distance_matrix = temporal_graph_distance(connectivity_matrix=connectivity_matrix)
+# print(distance_matrix)
+
+penalized_distance = penalize_distance(distance_matrix = distance_matrix, penalty = 3)
+previous_members, current_centers = first_kmeans(distance_matrix==penalized_distance, k=2)
+
+previous_distance = penalized_distance[0]
+
+total_membership = np.zeros((t, n))
+total_membership[0] = previous_members
+
+print('starting centers', current_centers)
+
+for time in range(1,t):
+     current_distance = penalized_distance[time]
+     new_members, new_centers = next_assignment(current_centers= current_centers, previous_distance = previous_distance, 
+                     current_distance = current_distance, max_drift = 1)
+     
+     previous_distance = current_distance.copy()
+     current_centers = list(new_centers).copy()
+
+     total_membership[time] = new_members
+     print(new_members)
+     print(current_centers)
+
+# print(current_centers)
+ltc = find_final_label_sc(weights = total_membership.T, k = 2)
+print('ltc', ltc)
+
+
+
