@@ -69,7 +69,6 @@ class STGKM():
                 total_sum = np.sum([np.sum(current_distance[center, members]) for center, members in zip(center_combination,cluster_members)])
                 #Return centers with smallest distances from their members
 
-                print('center_combo', center_combination, 'total sum', total_sum)
                 if total_sum < min_sum:
                     final_centers = center_combination
                     final_members = membership
