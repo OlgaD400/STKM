@@ -189,12 +189,13 @@ for time in range(1,t):
      new_members, new_centers = stgkm.next_assignment(current_centers= current_centers, previous_distance = previous_distance, 
                      current_distance = current_distance)
      
+     print(time, new_centers)
+     print(time, new_members)
+
      previous_distance = current_distance.copy()
      current_centers = list(new_centers).copy()
 
      total_membership[time] = new_members
-     print(new_members)
-     print(current_centers)
 
 # print(current_centers)
 ltc = find_final_label_sc(weights = total_membership.T, k = 2)

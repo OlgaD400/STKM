@@ -1,7 +1,8 @@
 import numpy as np
 from TKM_long_term_clusters import find_final_label_sc
 import itertools
-
+import networkx as nx
+import matplotlib.pyplot as plt
 
 class STGKM():
     def __init__(self, distance_matrix, penalty, max_drift, k):
@@ -10,11 +11,11 @@ class STGKM():
           self.k = k
           self.distance_matrix = distance_matrix
 
-          t,n,_ = self.distance_matrix.shape
+          self.t,self.n,_ = self.distance_matrix.shape
 
-          self.full_centers = np.zeros((t, k))
-          self.full_assignments = np.zeros((t, n))
-          self.ltc = np.zeros(n)
+          self.full_centers = np.zeros((self.t, self.k))
+          self.full_assignments = np.zeros((self.t, self.n))
+          self.ltc = np.zeros(self.n)
 
     def penalize_distance(self):
         penalized_distance = np.where(self.distance_matrix == np.inf, self.penalty, self.distance_matrix)
@@ -51,7 +52,6 @@ class STGKM():
     def next_assignment(self, current_centers, previous_distance, current_distance):
         #Find all vertices that are within max_drift distance of each current center        
         center_connections = [np.where(previous_distance[center,:] <= self.max_drift)[0] for center in current_centers]
-        
         #Preference to keep cluster centers the same
         center_distances = current_distance[current_centers, :]
         current_membership = np.argmin(center_distances, axis = 0)        
@@ -74,7 +74,7 @@ class STGKM():
                 
                 total_sum = np.sum([np.sum(current_distance[center, members]) for center, members in zip(center_combination,cluster_members)])
                 #Return centers with smallest distances from their members
-                
+
                 if total_sum < min_sum:
                     final_centers = center_combination
                     final_members = membership
@@ -83,7 +83,6 @@ class STGKM():
         return final_members, final_centers
     
     def run_stgkm(self):
-        t,n,_ = self.distance_matrix.shape
         penalized_distance = self.penalize_distance()
         current_members, current_centers = self.first_kmeans()
 
@@ -92,9 +91,9 @@ class STGKM():
         self.full_assignments[0] = current_members
         self.full_centers[0] = current_centers
 
-        for time in range(1,t):
+        for time in range(1,self.t):
             current_distance = penalized_distance[time]
-            new_members, new_centers = self.next_assignment(current_centers= current_centers, current_membership = current_members, previous_distance = previous_distance, 
+            new_members, new_centers = self.next_assignment(current_centers= current_centers, previous_distance = previous_distance, 
                             current_distance = current_distance)
             
             self.full_centers[time] = new_centers
@@ -106,3 +105,33 @@ class STGKM():
         self.ltc = find_final_label_sc(weights = self.full_assignments.T, k = self.k)
         
         return None
+    
+def visualize_graph(connectivity_matrix: np.ndarray, labels = [], centers = [],  
+                    color_dict = {0:'red', 1:'gray', 2: 'green', 3: 'blue', -1: 'cyan'}):
+    
+    t,n, _ = connectivity_matrix.shape
+
+    if len(np.unique(labels))> len(color_dict):
+        raise Exception('Color dictionary requires more than 4 labels')
+    
+    g0 = nx.Graph(connectivity_matrix[0])
+    pos = nx.spring_layout(g0)  
+
+    for time in range(t):
+        #No labels
+        if len(labels) == 0: 
+            nx.draw(nx.Graph(connectivity_matrix[time]), pos = pos, with_labels = True)
+        #Static long term labels
+        elif len(labels) == n: 
+            nx.draw(nx.Graph(connectivity_matrix[time]), pos = pos, node_color = [color_dict[label] for label in labels], with_labels = True)
+        #Changing labels at each time step 
+        elif len(labels) == t:
+            if len(centers) != 0:
+                center_size = np.ones(n)*300
+                center_size[centers[time].astype(int)] = 500
+                nx.draw(nx.Graph(connectivity_matrix[time]), pos = pos, node_color = [color_dict[label] for label in labels[time]], 
+                        node_size = center_size, with_labels = True)
+            else:
+                nx.draw(nx.Graph(connectivity_matrix[time]), pos = pos, node_color = [color_dict[label] for label in labels[time]], with_labels = True)
+
+        plt.show()
