@@ -5,7 +5,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 class STGKM():
-    def __init__(self, distance_matrix, penalty, max_drift, k):
+    def __init__(self, distance_matrix, penalty, max_drift, k, iter=10):
           self.penalty = penalty
           self.max_drift = max_drift
           self.k = k
@@ -16,6 +16,7 @@ class STGKM():
           self.full_centers = np.zeros((self.t, self.k))
           self.full_assignments = np.zeros((self.t, self.n))
           self.ltc = np.zeros(self.n)
+          self.iter = iter
 
     def penalize_distance(self):
         penalized_distance = np.where(self.distance_matrix == np.inf, self.penalty, self.distance_matrix)
@@ -27,7 +28,7 @@ class STGKM():
 
         centers = init_centers.copy()
 
-        for iter in range(10):
+        for iter in range(self.iter):
             #assign each point to its closest cluster center
             center_distances = init_matrix[centers, :]
             membership = np.argmin(center_distances, axis =0)
@@ -52,6 +53,7 @@ class STGKM():
     def next_assignment(self, current_centers, previous_distance, current_distance):
         #Find all vertices that are within max_drift distance of each current center        
         center_connections = [np.where(previous_distance[center,:] <= self.max_drift)[0] for center in current_centers]
+        
         #Preference to keep cluster centers the same
         center_distances = current_distance[current_centers, :]
         current_membership = np.argmin(center_distances, axis = 0)        
@@ -81,6 +83,57 @@ class STGKM():
                     min_sum = total_sum
             
         return final_members, final_centers
+    
+    def next_assignment_proxy(self, current_centers, previous_distance, current_distance):
+        center_connections = [np.where(previous_distance[center,:] <= self.max_drift)[0] for center in current_centers]
+
+        #Preference to keep cluster centers the same
+        center_distances = current_distance[current_centers, :]
+        current_membership = np.argmin(center_distances, axis = 0)        
+        current_members = [np.where(current_membership == cluster)[0] for cluster in range(self.k)]
+        min_sum = np.sum([np.sum(current_distance[center, members]) for center, members in zip(current_centers,current_members)])
+        final_members = current_membership
+
+        for k_index, center_k_possibilities in enumerate(center_connections):
+            if len(center_k_possibilities)>1:
+                for possibility in center_k_possibilities:
+                    changing_centers = current_centers.copy()
+                    changing_centers[k_index] = possibility
+
+                    membership = np.argmin(current_distance[changing_centers], axis = 0)
+                    cluster_members = [np.where(membership == cluster)[0] for cluster in range(self.k)]
+                    curr_sum = np.sum([np.sum(current_distance[center, members]) for center, members in zip(changing_centers, cluster_members)])
+
+                    if curr_sum < min_sum:
+                        min_sum = curr_sum
+                        current_centers[k_index] = possibility
+                        final_members = membership
+
+        return final_members, current_centers
+    
+    def run_stgkm_proxy(self):
+        penalized_distance = self.penalize_distance()
+        current_members, current_centers = self.first_kmeans()
+
+        previous_distance = penalized_distance[0]
+
+        self.full_assignments[0] = current_members
+        self.full_centers[0] = current_centers
+
+        for time in range(1,self.t):
+            current_distance = penalized_distance[time]
+            new_members, new_centers = self.next_assignment_proxy(current_centers= current_centers, previous_distance = previous_distance, 
+                            current_distance = current_distance)
+            
+            self.full_centers[time] = new_centers
+            self.full_assignments[time] = new_members
+
+            previous_distance = current_distance.copy()
+            current_centers = list(new_centers).copy()    
+
+        self.ltc = find_final_label_sc(weights = self.full_assignments.T, k = self.k)
+        
+        return None
     
     def run_stgkm(self):
         penalized_distance = self.penalize_distance()

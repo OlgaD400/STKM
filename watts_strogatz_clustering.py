@@ -3,9 +3,8 @@ from distance_functions import temporal_graph_distance
 from TKM_long_term_clusters import find_final_label_sc
 import numpy as np
 import matplotlib.pyplot as plt
-from graph_clustering_functions import STGKM
+from graph_clustering_functions import STGKM, visualize_graph
 import networkx as nx
-from graph_clustering_functions import visualize_graph
 
 n = 8
 t = 20
@@ -25,9 +24,9 @@ print('graph created')
 distance_matrix = temporal_graph_distance(connectivity_matrix=connectivity_matrix)
 penalty = np.unique(distance_matrix)[-2] + 1
 
-stgkm = STGKM (distance_matrix=distance_matrix, penalty = penalty, max_drift = 1, k = 3)
+stgkm = STGKM (distance_matrix=distance_matrix, penalty = penalty, max_drift = 1, k = 2)
 
-stgkm.run_stgkm()
+stgkm.run_stgkm_proxy()
 print(stgkm.ltc)
 
 
