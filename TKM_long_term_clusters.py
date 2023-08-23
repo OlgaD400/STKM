@@ -1,9 +1,12 @@
 import numpy as np
 from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score
 from typing import List, Dict, Tuple
+from spectral_functions import *
+from sklearn.cluster import KMeans
+from sklearn.cluster import AgglomerativeClustering
 
 
-def similarity_measure(x: np.ndarray, y: np.ndarray) -> np.float:
+def similarity_measure(x: np.ndarray, y: np.ndarray) -> float:
     """
     Calculate similarity between two vectors. Takes into account order of elements in arrays.
 
@@ -11,12 +14,12 @@ def similarity_measure(x: np.ndarray, y: np.ndarray) -> np.float:
         x (np.array): Vector
         y (np.array): Vector
     Returns:
-        np.float: similarity measure
+        float: similarity measure
     """
+    # return 1 - np.linalg.norm(x-y, 0)/len(x)
     return np.sum(x == y) / len(x)
 
-
-def similarity_matrix(weights: np.ndarray, similarity_function: function) -> np.ndarray:
+def similarity_matrix(weights: np.ndarray, similarity_function) -> np.ndarray:
     """
     Return similarity matrix where entry i,j contains the similarity of point assignment histories i and j.
 
@@ -30,7 +33,7 @@ def similarity_matrix(weights: np.ndarray, similarity_function: function) -> np.
         assignments = np.argmax(weights, axis=2).T
     elif len(weights.shape) == 2:
         assignments = weights
-    sim_mat = pairwise_distances(assignments, metric=similarity_function)
+    sim_mat = pairwise_distances(assignments, metric=similarity_measure)
 
     return sim_mat
 
@@ -174,9 +177,9 @@ def find_long_term_clusters(
     return long_term_clusters
 
 
-def find_optimal_threshold(
+def score_predicted_assignments(
     weights: np.ndarray, k: int, true_labels: np.ndarray
-) -> Tuple(float, float):
+) -> Tuple[float, float]:
     """
     Caluclate the AMI and total AMI scores given the true and predicted cluster assignments.
 
@@ -188,7 +191,8 @@ def find_optimal_threshold(
         ami (float):
         tot_ami (float):
     """
-    pred_labels = find_final_labels(weights, k, all_labels=[], counts=[])
+    # pred_labels = find_final_labels(weights, k, all_labels=[], counts=[])
+    pred_labels = find_final_label_sc(weights, k)
 
     ami = adjusted_mutual_info_score(true_labels, pred_labels)
 
@@ -247,6 +251,21 @@ def ltc_to_list(n: int, mapped_ltc: List[List[int]]) -> np.ndarray:
     return pred_labels
 
 
+def find_final_label_sc(weights: np.ndarray, k: int):
+    criteria_mat = similarity_matrix(weights, similarity_function=similarity_measure)
+
+    # L = LaplacianMatrix(criteria_mat)
+    # X, eigvals = EigVecMatrix(L, k)
+    # normalX = Normalize(X)
+
+    # model = KMeans(n_clusters=k, random_state=0).fit(normalX)
+
+    model = AgglomerativeClustering(n_clusters=k, linkage="average", affinity="precomputed")
+    model.fit(1-criteria_mat)
+
+    return model.labels_
+
+
 def find_final_labels(
     weights: np.ndarray,
     k: int,
@@ -279,7 +298,9 @@ def find_final_labels(
         indices = np.arange(n)
         np.random.shuffle(indices)
         mapping = {np.arange(n)[i]: indices[i] for i in range(n)}
-        criteria_mat = similarity_matrix(weights[indices, :])
+        criteria_mat = similarity_matrix(
+            weights[indices, :], similarity_function=similarity_measure
+        )
         ltc = find_k_clusters(k=k, criteria_mat=criteria_mat)
 
         mapped_ltc = map_ltc(mapping, ltc)
