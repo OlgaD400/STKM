@@ -1,18 +1,19 @@
+""" Script for running STGKM on Watts Strogratz dynamic graph."""
+import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
 from watts_strogatz import WattsStrogatz
 from distance_functions import temporal_graph_distance
 from TKM_long_term_clusters import find_final_label_sc
-import numpy as np
-import matplotlib.pyplot as plt
 from tkm.graph_clustering_functions import STGKM, visualize_graph
-import networkx as nx
 
-n = 8
-t = 100
+NUMNODES = 8
+TIMESTEPS = 100
 
-WS = WattsStrogatz(n=n, q=3, probability=0.40)
-connectivity_matrix = np.zeros((t, n, n))
+WS = WattsStrogatz(num_nodes=NUMNODES, num_neighbors=3, probability=0.40)
+connectivity_matrix = np.zeros((TIMESTEPS, NUMNODES, NUMNODES))
 
-for time in range(t):
+for time in range(TIMESTEPS):
     connectivity = WS.update()
     connectivity_matrix[time, :, :] = connectivity.toarray()
     # WS.visualize()
@@ -53,8 +54,9 @@ visualize_graph(
 
 # for time in range(1,t):
 #      current_distance = penalized_distance[time]
-#      new_members, new_centers = stgkm.next_assignment(current_centers= current_centers, previous_distance = previous_distance,
-#                      current_distance = current_distance)
+#      new_members, new_centers = stgkm.next_assignment(current_centers= current_centers,
+#                                                      previous_distance = previous_distance,
+#                                                      current_distance = current_distance)
 
 #      previous_distance = current_distance.copy()
 #      current_centers = list(new_centers).copy()
@@ -63,6 +65,6 @@ visualize_graph(
 #      print(new_members)
 #      print(current_centers)
 
-# # print(current_centers)
+# print(current_centers)
 # ltc = find_final_label_sc(weights = total_membership.T, k = 2)
 # print('ltc', ltc)
