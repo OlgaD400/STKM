@@ -1,8 +1,9 @@
 from TKM import TKM
-from TKM_long_term_clusters import find_optimal_threshold
+from TKM_long_term_clusters import score_predicted_assignments
 from sklearn.metrics.cluster import adjusted_mutual_info_score
 from sklearn.cluster import KMeans, DBSCAN
 import time
+
 
 import numpy as np
 import pandas as pd
@@ -12,7 +13,7 @@ from typing import Tuple, List
 
 def read_data(
     csv_path: str, min_size: int = 0, max_size: int = 3000
-) -> Tuple(pd.DataFrame, np.ndarray, List):
+) -> Tuple[pd.DataFrame, np.ndarray, List]:
     """
     Read the data from the csv file.
 
@@ -70,7 +71,7 @@ def perform_clustering(
     true_labels: np.array,
     lam: float = 0.60,
     max_iter: int = 5000,
-) -> Tuple(np.float, np.float, np.float, np.ndarray):
+) -> Tuple[np.float, np.float, np.float, np.ndarray]:
     """
     Perform clustering and evaluate AMI against the ground-truth long-term clusters.
 
@@ -94,7 +95,7 @@ def perform_clustering(
     tkm.perform_clustering(k=k, lam=lam, max_iter=max_iter)
     runtime = time.time() - start_time
 
-    ami, tot_ami = find_optimal_threshold(
+    ami, tot_ami = score_predicted_assignments(
         weights=tkm.weights, k=k, true_labels=true_labels
     )
 
