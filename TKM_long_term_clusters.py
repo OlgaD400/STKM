@@ -1,9 +1,7 @@
+from typing import List, Dict, Tuple
+from collections.abc import Callable
 import numpy as np
 from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score
-from typing import List, Dict, Tuple
-from spectral_functions import *
-from sklearn.cluster import KMeans
-from sklearn.cluster import AgglomerativeClustering
 
 
 def similarity_measure(x: np.ndarray, y: np.ndarray) -> float:
@@ -19,7 +17,8 @@ def similarity_measure(x: np.ndarray, y: np.ndarray) -> float:
     # return 1 - np.linalg.norm(x-y, 0)/len(x)
     return np.sum(x == y) / len(x)
 
-def similarity_matrix(weights: np.ndarray, similarity_function) -> np.ndarray:
+
+def similarity_matrix(weights: np.ndarray, similarity_function: Callable) -> np.ndarray:
     """
     Return similarity matrix where entry i,j contains the similarity of point assignment histories i and j.
 
@@ -311,7 +310,6 @@ def find_final_labels(
         # If the mapped labels correspond exactly to a previous label, increase the count on the previous label.
         # Else, add the mapped labels as a new, unique mapping with a count of 1
         if len(all_labels) != 0:
-
             for index, labels in enumerate(all_labels):
                 ami = adjusted_mutual_info_score(mapped_labels, labels)
                 if ami == 1:
