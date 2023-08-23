@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "tkm"
+version = "0.1.0"
+description = "Spatiotemporal k-means"
+authors = ["Olga Dorabiala <olga400916@gmail.com>", "Dev Dabke <dev@dabke.com>"]
+readme = "README.md"
+license = "MIT"
+
+
+[tool.poetry.dependencies]
+python = "^3.10"
+ipykernel = "^6.25.1"
+ipython = "^8.14.0"
+matplotlib = "^3.7.2"
+numpy = "^1.25.2"
+scikit-learn = "^1.3.0"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.7.0"
+pylint = "^2.17.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
