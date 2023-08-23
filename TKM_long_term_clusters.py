@@ -1,3 +1,4 @@
+""" Find long term clusters in phase 2 of STKM """
 from typing import List, Dict, Tuple
 from collections.abc import Callable
 import numpy as np
@@ -5,27 +6,29 @@ from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score
 from sklearn.cluster import AgglomerativeClustering
 
 
-def similarity_measure(x: np.ndarray, y: np.ndarray) -> float:
+def similarity_measure(vector_1: np.ndarray, vector_2: np.ndarray) -> float:
     """
     Calculate similarity between two vectors. Takes into account order of elements in arrays.
 
     Args:
-        x (np.array): Vector
-        y (np.array): Vector
+        vector_1 (np.array): Vector
+        vector_2 (np.array): Vector
     Returns:
         float: similarity measure
     """
     # return 1 - np.linalg.norm(x-y, 0)/len(x)
-    return np.sum(x == y) / len(x)
+    return np.sum(vector_1 == vector_2) / len(vector_1)
 
 
 def similarity_matrix(weights: np.ndarray, similarity_function: Callable) -> np.ndarray:
     """
-    Return similarity matrix where entry i,j contains the similarity of point assignment histories i and j.
+    Return similarity matrix where entry i,j contains the similarity of point 
+    assignment histories i and j.
 
     Args:
         weights (np.array): Point assignment histories.
-        similarity_function (function): Function that defines the similarity measure between two arrays.
+        similarity_function (function): Function that defines the similarity 
+        measure between two arrays.
     Returns:
         sim_mat (np.array): Similarity matrix.
     """
@@ -47,13 +50,16 @@ def find_k_clusters(
     """
     Find k long term clusters.
 
-    Assign points to the same long-term cluster if the similarity between their assignment histories is above some threshold.
-    Find the threshold that results in as close to k long-term clusters as possible.
+    Assign points to the same long-term cluster if the similarity between their assignment 
+    histories is above some threshold. Find the threshold that results in as close to k 
+    long-term clusters as possible.
 
     Args:
         k (int): The number of long term clusters to look for.
-        criteria_mat (np.ndarray): The similarity matrix where entry i,j contains the similarity of point assignment histories i and j.
-        threshold_change (float): The amount by which to increment the similarity threshold if k clusters are not found.
+        criteria_mat (np.ndarray): The similarity matrix where entry i,j contains the similarity of 
+        point assignment histories i and j.
+        threshold_change (float): The amount by which to increment the similarity threshold if 
+        k clusters are not found.
     Returns:
         best_long_term_clusters (List[List[int]]): Lists of indices of the points in each of the clusters.
     """
@@ -139,9 +145,9 @@ def find_long_term_clusters(
 
     max_iters = criteria_mat.shape[0]
     ids = np.arange(max_iters)
-    n = 0
+    num_iters = 0
 
-    while (point_of_interest < criteria_mat.shape[0]) and (n < max_iters):
+    while (point_of_interest < criteria_mat.shape[0]) and (num_iters < max_iters):
         ind = list(
             np.where(criteria_mat[point_of_interest, :] >= similarity_threshold)[0]
         )
@@ -173,12 +179,12 @@ def find_long_term_clusters(
             point_of_interest = fin_diff[0]
         else:
             point_of_interest = criteria_mat.shape[0]
-        n += 1
+        num_iters += 1
     return long_term_clusters
 
 
 def score_predicted_assignments(
-    weights: np.ndarray, k: int, true_labels: np.ndarray
+    weights: np.ndarray, num_clusters: int, true_labels: np.ndarray
 ) -> Tuple[float, float]:
     """
     Caluclate the AMI and total AMI scores given the true and predicted cluster assignments.
@@ -192,19 +198,19 @@ def score_predicted_assignments(
         tot_ami (float):
     """
     # pred_labels = find_final_labels(weights, k, all_labels=[], counts=[])
-    pred_labels = find_final_label_sc(weights, k)
+    pred_labels = find_final_label_sc(weights, num_clusters)
 
     ami = adjusted_mutual_info_score(true_labels, pred_labels)
 
     if len(weights.shape) == 3:
         assignments = np.argmax(weights, axis=2).T
-        t, n, k = weights.shape
+        timesteps, num_points, num_clusters = weights.shape
     elif len(weights.shape) == 2:
         assignments = weights
-        n, t = weights.shape
+        num_points, timesteps = weights.shape
 
     tot_ami = adjusted_mutual_info_score(
-        np.tile(true_labels, t), (assignments.T).reshape(t * n)
+        np.tile(true_labels, timesteps), (assignments.T).reshape(timesteps * num_points)
     )
 
     return ami, tot_ami
@@ -232,18 +238,18 @@ def map_ltc(mapping: Dict, ltc: List[List[int]]) -> List[List[int]]:
     return mapped_ltc
 
 
-def ltc_to_list(n: int, mapped_ltc: List[List[int]]) -> np.ndarray:
+def ltc_to_list(num_points: int, mapped_ltc: List[List[int]]) -> np.ndarray:
     """
     Turn lists of points in clusters into an array where each entry i contains the cluster label of point i.
 
     Args:
-        n (int): Number of points
+        num_points (int): Number of points
         mapped_ltc (List[List[int]]): Long-term clusters after re-indexing so that points correspond to the point order in the original dataset.
 
     Returns:
         pred_labels (np.ndarray): Array where entry i contains the cluster label of point i.
     """
-    pred_labels = np.zeros(n)
+    pred_labels = np.zeros(num_points)
 
     for i, cluster in enumerate(mapped_ltc):
         pred_labels[cluster] = i
@@ -252,6 +258,7 @@ def ltc_to_list(n: int, mapped_ltc: List[List[int]]) -> np.ndarray:
 
 
 def find_final_label_sc(weights: np.ndarray, k: int):
+    """ Find final long term cluster labels using agglomerative clustering """
     criteria_mat = similarity_matrix(weights, similarity_function=similarity_measure)
 
     # L = LaplacianMatrix(criteria_mat)
@@ -268,7 +275,7 @@ def find_final_label_sc(weights: np.ndarray, k: int):
 
 def find_final_labels(
     weights: np.ndarray,
-    k: int,
+    num_clusters: int,
     all_labels: List,
     counts: List[int],
     trials: int = 5,
@@ -288,23 +295,23 @@ def find_final_labels(
     tot_trials += trials
 
     if len(weights.shape) == 3:
-        t, n, k = weights.shape
+        _, num_points, num_clusters = weights.shape
         weights = np.argmax(weights, axis=2).T
     elif len(weights.shape) == 2:
-        n, t = weights.shape
+        num_points, timesteps = weights.shape
 
     for trial in range(trials):
         # for each trial, shuffle the assignment histories and get ltc
-        indices = np.arange(n)
+        indices = np.arange(num_points)
         np.random.shuffle(indices)
-        mapping = {np.arange(n)[i]: indices[i] for i in range(n)}
+        mapping = {np.arange(num_points)[i]: indices[i] for i in range(num_points)}
         criteria_mat = similarity_matrix(
             weights[indices, :], similarity_function=similarity_measure
         )
-        ltc = find_k_clusters(k=k, criteria_mat=criteria_mat)
+        ltc = find_k_clusters(k=num_clusters, criteria_mat=criteria_mat)
 
         mapped_ltc = map_ltc(mapping, ltc)
-        mapped_labels = ltc_to_list(n, mapped_ltc)
+        mapped_labels = ltc_to_list(num_points, mapped_ltc)
 
         matched = False
 
@@ -333,7 +340,7 @@ def find_final_labels(
         if tot_trials < 20:
             return find_final_labels(
                 weights,
-                k,
+                num_clusters,
                 all_labels=all_labels,
                 counts=counts,
                 trials=2,
