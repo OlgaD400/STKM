@@ -3,13 +3,13 @@ from distance_functions import temporal_graph_distance
 from TKM_long_term_clusters import find_final_label_sc
 import numpy as np
 import matplotlib.pyplot as plt
-from graph_clustering_functions import STGKM, visualize_graph
+from tkm.graph_clustering_functions import STGKM, visualize_graph
 import networkx as nx
 
 n = 8
 t = 20
 
-WS = WattsStrogatz(n = n, q = 3, probability = .40)
+WS = WattsStrogatz(n=n, q=3, probability=0.40)
 connectivity_matrix = np.zeros((t, n, n))
 
 for time in range(t):
@@ -18,19 +18,23 @@ for time in range(t):
     # WS.visualize()
     # plt.show()
 
-print('graph created')
+print("graph created")
 
 #########################
 distance_matrix = temporal_graph_distance(connectivity_matrix=connectivity_matrix)
 penalty = np.unique(distance_matrix)[-2] + 1
 
-stgkm = STGKM (distance_matrix=distance_matrix, penalty = penalty, max_drift = 1, k = 2)
+stgkm = STGKM(distance_matrix=distance_matrix, penalty=penalty, max_drift=1, k=2)
 
 stgkm.run_stgkm_proxy()
 print(stgkm.ltc)
 
 
-visualize_graph(connectivity_matrix=connectivity_matrix, labels = stgkm.full_assignments, centers = stgkm.full_centers)
+visualize_graph(
+    connectivity_matrix=connectivity_matrix,
+    labels=stgkm.full_assignments,
+    centers=stgkm.full_centers,
+)
 
 
 ##############
@@ -48,9 +52,9 @@ visualize_graph(connectivity_matrix=connectivity_matrix, labels = stgkm.full_ass
 
 # for time in range(1,t):
 #      current_distance = penalized_distance[time]
-#      new_members, new_centers = stgkm.next_assignment(current_centers= current_centers, previous_distance = previous_distance, 
+#      new_members, new_centers = stgkm.next_assignment(current_centers= current_centers, previous_distance = previous_distance,
 #                      current_distance = current_distance)
-     
+
 #      previous_distance = current_distance.copy()
 #      current_centers = list(new_centers).copy()
 
@@ -61,6 +65,3 @@ visualize_graph(connectivity_matrix=connectivity_matrix, labels = stgkm.full_ass
 # # print(current_centers)
 # ltc = find_final_label_sc(weights = total_membership.T, k = 2)
 # print('ltc', ltc)
-
-
-
