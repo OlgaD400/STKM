@@ -1,8 +1,7 @@
 import numpy as np
 from distance_functions import temporal_graph_distance
 from TKM_long_term_clusters import find_final_label_sc
-import itertools
-from graph_clustering_functions import STGKM
+from graph_clustering_functions import STGKM, visualize_graph
 import networkx as nx
 import matplotlib.pyplot as plt
 
@@ -167,38 +166,49 @@ def assign_vertices(distance_matrix: np.ndarray, center_vertices: np.ndarray):
 #penalty for not being connected
 #maximum drift between cluster centers
 
-stgkm = STGKM(distance_matrix = distance_matrix, penalty = 3, max_drift = 1, k = 2)
-# stgkm.run_stgkm()
+# stgkm = STGKM(distance_matrix = distance_matrix, penalty = 3, max_drift = 1, k = 2)
+# stgkm.run_stgkm_proxy()
+
+# visualize_graph(connectivity_matrix=two_cluster_connectivity_matrix, labels = stgkm.full_assignments, 
+#                 centers = stgkm.full_centers)
+
+for i in range(4):
+    stgkm = STGKM(distance_matrix = distance_matrix[i][np.newaxis, :, :], penalty = 3, max_drift = 1, k = 2)
+    stgkm.run_stgkm()
+
+    visualize_graph(connectivity_matrix=two_cluster_connectivity_matrix[i][np.newaxis, :, :], labels = stgkm.full_assignments, 
+                    centers = stgkm.full_centers)
+
 # print(stgkm.ltc)
 
-t,n,_ = distance_matrix.shape 
+# t,n,_ = distance_matrix.shape 
 
-penalized_distance = stgkm.penalize_distance()
-previous_members, current_centers = stgkm.first_kmeans()
+# penalized_distance = stgkm.penalize_distance()
+# previous_members, current_centers = stgkm.first_kmeans()
 
-previous_distance = penalized_distance[0]
+# previous_distance = penalized_distance[0]
 
-total_membership = np.zeros((t, n))
-total_membership[0] = previous_members
+# total_membership = np.zeros((t, n))
+# total_membership[0] = previous_members
 
-print('starting centers', current_centers)
-print('starting_membership', previous_members)
+# print('starting centers', current_centers)
+# print('starting_membership', previous_members)
 
-for time in range(1,t):
-     current_distance = penalized_distance[time]
-     new_members, new_centers = stgkm.next_assignment(current_centers= current_centers, previous_distance = previous_distance, 
-                     current_distance = current_distance)
+# for time in range(1,t):
+#      current_distance = penalized_distance[time]
+#      new_members, new_centers = stgkm.next_assignment(current_centers= current_centers, previous_distance = previous_distance, 
+#                      current_distance = current_distance)
      
-     print(time, new_centers)
-     print(time, new_members)
+#      print(time, new_centers)
+#      print(time, new_members)
 
-     previous_distance = current_distance.copy()
-     current_centers = list(new_centers).copy()
+#      previous_distance = current_distance.copy()
+#      current_centers = list(new_centers).copy()
 
-     total_membership[time] = new_members
+#      total_membership[time] = new_members
 
-# print(current_centers)
-ltc = find_final_label_sc(weights = total_membership.T, k = 2)
-print('ltc', ltc)
+# # print(current_centers)
+# ltc = find_final_label_sc(weights = total_membership.T, k = 2)
+# print('ltc', ltc)
 
 

@@ -7,9 +7,9 @@ from graph_clustering_functions import STGKM, visualize_graph
 import networkx as nx
 
 n = 8
-t = 20
+t = 100
 
-WS = WattsStrogatz(n = n, q = 3, probability = .40)
+WS = WattsStrogatz(n = n, q = 3, probability = .20)
 connectivity_matrix = np.zeros((t, n, n))
 
 for time in range(t):
@@ -24,13 +24,14 @@ print('graph created')
 distance_matrix = temporal_graph_distance(connectivity_matrix=connectivity_matrix)
 penalty = np.unique(distance_matrix)[-2] + 1
 
-stgkm = STGKM (distance_matrix=distance_matrix, penalty = penalty, max_drift = 1, k = 2)
+stgkm = STGKM (distance_matrix=distance_matrix[:50,:,:], penalty = penalty, max_drift = 1, k = 2)
 
-stgkm.run_stgkm_proxy()
+# stgkm.run_stgkm_proxy()
+stgkm.run_stgkm()
 print(stgkm.ltc)
 
 
-visualize_graph(connectivity_matrix=connectivity_matrix, labels = stgkm.full_assignments, centers = stgkm.full_centers)
+visualize_graph(connectivity_matrix=connectivity_matrix[:50,:,:], labels = stgkm.full_assignments, centers = stgkm.full_centers)
 
 
 ##############
