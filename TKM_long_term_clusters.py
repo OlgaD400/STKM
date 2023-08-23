@@ -2,6 +2,7 @@ from typing import List, Dict, Tuple
 from collections.abc import Callable
 import numpy as np
 from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score
+from sklearn.cluster import AgglomerativeClustering
 
 
 def similarity_measure(x: np.ndarray, y: np.ndarray) -> float:
@@ -32,7 +33,7 @@ def similarity_matrix(weights: np.ndarray, similarity_function: Callable) -> np.
         assignments = np.argmax(weights, axis=2).T
     elif len(weights.shape) == 2:
         assignments = weights
-    sim_mat = pairwise_distances(assignments, metric=similarity_measure)
+    sim_mat = pairwise_distances(assignments, metric=similarity_function)
 
     return sim_mat
 
