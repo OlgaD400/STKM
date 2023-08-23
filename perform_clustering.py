@@ -1,14 +1,15 @@
-from TKM import TKM
-from TKM_long_term_clusters import score_predicted_assignments
-from sklearn.metrics.cluster import adjusted_mutual_info_score
-from sklearn.cluster import KMeans, DBSCAN
+""" Functionality for reading data and running STKM, DBSCAN, and k_means """
+
 import time
-
-
+from typing import Tuple, List
 import numpy as np
 import pandas as pd
+from sklearn.metrics.cluster import adjusted_mutual_info_score
+from sklearn.cluster import KMeans, DBSCAN
+from TKM import TKM
+from TKM_long_term_clusters import (score_predicted_assignments, similarity_matrix,
+                                    find_k_clusters, find_long_term_clusters, similarity_measure)
 
-from typing import Tuple, List
 
 
 def read_data(
@@ -85,14 +86,15 @@ def perform_clustering(
         ami (float): Adjusted mutual info score.
         tot_ami (float): Total Adjusted mutual info score.
         runtime (float): Runtime of the clustering process.
-        tkm.weights (np.ndarray): Weight assignment matrix containing assingment of each point to a cluster at every time step.
+        tkm.weights (np.ndarray): Weight assignment matrix containing assingment of each 
+            point to a cluster at every time step.
     """
     k = len(np.unique(true_labels))
 
     tkm = TKM(clustering_data)
 
     start_time = time.time()
-    tkm.perform_clustering(k=k, lam=lam, max_iter=max_iter)
+    tkm.perform_clustering(num_clusters=k, lam=lam, max_iter=max_iter)
     runtime = time.time() - start_time
 
     ami, tot_ami = score_predicted_assignments(
@@ -104,7 +106,8 @@ def perform_clustering(
 
 def k_means(clustering_data: np.array, true_labels: np.array) -> np.float:
     """
-    Perform standard k_means clustering and evaluate AMI against the ground-truth long-term clusters.
+    Perform standard k_means clustering and evaluate AMI against the 
+    ground-truth long-term clusters.
 
     Args:
         clustering_data (np.array): Data to be clustered.
@@ -114,18 +117,19 @@ def k_means(clustering_data: np.array, true_labels: np.array) -> np.float:
     Returns:
         ami (float): Adjusted mutual info score.
     """
-    t, m, n = clustering_data.shape
-    k = len(np.unique(true_labels))
+    timesteps, _, num_points = clustering_data.shape
+    num_clusters = len(np.unique(true_labels))
 
     weights = []
-    for time in range(t):
-        weights.append(KMeans(n_clusters=k).fit_predict(clustering_data[time, :, :].T))
+    for timestep in range(timesteps):
+        weights.append(KMeans(n_clusters=num_clusters).fit_predict(
+            clustering_data[timestep, :, :].T))
 
     weights = np.array(weights).T
 
-    criteria_mat = similarity_matrix(weights)
+    criteria_mat = similarity_matrix(weights, similarity_function=similarity_measure)
 
-    ltc = find_k_clusters(k=k, criteria_mat=criteria_mat, threshold_change=0.05)
+    ltc = find_k_clusters(k=num_clusters, criteria_mat=criteria_mat, threshold_change=0.05)
 
     if ltc is None:
         thresholds = np.linspace(0.10, 0.90, 9)
@@ -136,7 +140,7 @@ def k_means(clustering_data: np.array, true_labels: np.array) -> np.float:
                 similarity_threshold=threshold, criteria_mat=criteria_mat
             )
 
-            pred_labels = np.zeros(n)
+            pred_labels = np.zeros(num_points)
 
             for i, cluster in enumerate(ltc):
                 pred_labels[cluster] = i
@@ -147,7 +151,7 @@ def k_means(clustering_data: np.array, true_labels: np.array) -> np.float:
                 ami = current_ami
 
     else:
-        pred_labels = np.zeros(n)
+        pred_labels = np.zeros(num_points)
 
         for i, cluster in enumerate(ltc):
             pred_labels[cluster] = i
@@ -159,7 +163,8 @@ def k_means(clustering_data: np.array, true_labels: np.array) -> np.float:
 
 def dbscan(clustering_data: np.array, true_labels: np.array) -> np.float:
     """
-    Perform standard k_means clustering and evaluate AMI against the ground-truth long-term clusters.
+    Perform standard k_means clustering and evaluate AMI against 
+    the ground-truth long-term clusters.
 
     Args:
         clustering_data (np.array): Data to be clustered.
@@ -169,18 +174,18 @@ def dbscan(clustering_data: np.array, true_labels: np.array) -> np.float:
     Returns:
         ami (float): Adjusted mutual info score.
     """
-    t, m, n = clustering_data.shape
-    k = len(np.unique(true_labels))
+    timesteps, _, num_points = clustering_data.shape
+    num_clusters = len(np.unique(true_labels))
 
     weights = []
-    for time in range(t):
-        weights.append(DBSCAN(eps=0.5).fit_predict(clustering_data[time, :, :].T))
+    for timestep in range(timesteps):
+        weights.append(DBSCAN(eps=0.5).fit_predict(clustering_data[timestep, :, :].T))
 
     weights = np.array(weights).T
 
-    criteria_mat = similarity_matrix(weights)
+    criteria_mat = similarity_matrix(weights, similarity_function=similarity_measure)
 
-    ltc = find_k_clusters(k=k, criteria_mat=criteria_mat, threshold_change=0.05)
+    ltc = find_k_clusters(k=num_clusters, criteria_mat=criteria_mat, threshold_change=0.05)
 
     if ltc is None:
         thresholds = np.linspace(0.10, 0.90, 9)
@@ -191,7 +196,7 @@ def dbscan(clustering_data: np.array, true_labels: np.array) -> np.float:
                 similarity_threshold=threshold, criteria_mat=criteria_mat
             )
 
-            pred_labels = np.zeros(n)
+            pred_labels = np.zeros(num_points)
 
             for i, cluster in enumerate(ltc):
                 pred_labels[cluster] = i
@@ -202,7 +207,7 @@ def dbscan(clustering_data: np.array, true_labels: np.array) -> np.float:
                 ami = current_ami
 
     else:
-        pred_labels = np.zeros(n)
+        pred_labels = np.zeros(num_points)
 
         for i, cluster in enumerate(ltc):
             pred_labels[cluster] = i
