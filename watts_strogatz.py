@@ -10,7 +10,8 @@ class WattsStrogatz:
         
         Args:
             num_nodes: number of nodes in graph
-            num_neighbors: number of neighbors each node in the graph has 
+            num_neighbors: Each node is connected to num_neighbors//2 neighbors
+                both clockwise and counterclockwise
             probability: probability of an edge being moved at each time step
         """
         self.graph = nx.Graph()

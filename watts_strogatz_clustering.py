@@ -3,14 +3,14 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from watts_strogatz import WattsStrogatz
-from distance_functions import temporal_graph_distance
+from distance_functions import s_journey
 from TKM_long_term_clusters import find_final_label_sc
 from tkm.graph_clustering_functions import STGKM, visualize_graph
 
 NUMNODES = 8
 TIMESTEPS = 100
 
-WS = WattsStrogatz(num_nodes=NUMNODES, num_neighbors=3, probability=0.40)
+WS = WattsStrogatz(num_nodes=NUMNODES, num_neighbors=2, probability=0.20)
 connectivity_matrix = np.zeros((TIMESTEPS, NUMNODES, NUMNODES))
 
 for time in range(TIMESTEPS):
@@ -22,21 +22,23 @@ for time in range(TIMESTEPS):
 print("graph created")
 
 #########################
-distance_matrix = temporal_graph_distance(connectivity_matrix=connectivity_matrix)
-penalty = np.unique(distance_matrix)[-2] + 1
 
-stgkm = STGKM(distance_matrix=distance_matrix, penalty=penalty, max_drift=1, k=2)
+SUBSET = 20
+distance_matrix = s_journey(connectivity_matrix=connectivity_matrix)
+subset_distance_matrix = distance_matrix[:SUBSET, :,:]
+penalty = np.unique(subset_distance_matrix)[-2] + 1
 
-# stgkm.run_stgkm_proxy()
-stgkm.run_stgkm()
+stgkm = STGKM(distance_matrix=subset_distance_matrix, penalty=penalty, max_drift=1, k=2)
+
+stgkm.run_stgkm(method = 'full')
 print(stgkm.ltc)
 
 
-visualize_graph(
-    connectivity_matrix=connectivity_matrix,
-    labels=stgkm.full_assignments,
-    centers=stgkm.full_centers,
-)
+# visualize_graph(
+#     connectivity_matrix=connectivity_matrix[:SUBSET, :, :],
+#     labels=stgkm.ltc,
+#     centers=stgkm.full_centers,
+# )
 
 
 ##############

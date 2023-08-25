@@ -1,7 +1,7 @@
 import numpy as np
-from distance_functions import temporal_graph_distance
+from distance_functions import s_journey
 from TKM_long_term_clusters import find_final_label_sc
-from graph_clustering_functions import STGKM, visualize_graph
+from tkm.graph_clustering_functions import STGKM, visualize_graph
 import networkx as nx
 import matplotlib.pyplot as plt
 
@@ -25,7 +25,7 @@ def test_temporal_graph_distance():
     # for i in range(t):
     #     assert np.all(connectivity_matrix[i,:,:] == connectivity_matrix[i,:,:].T)
 
-    distance_matrix = temporal_graph_distance(connectivity_matrix)
+    distance_matrix = s_journey(connectivity_matrix)
     assert np.all(
         distance_matrix
         == np.array(
@@ -50,7 +50,7 @@ def test_temporal_graph_distance():
             [[0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0]],
         ]
     )
-    distance_matrix = temporal_graph_distance(connectivity_matrix)
+    distance_matrix = s_journey(connectivity_matrix)
     assert np.all(
         distance_matrix
         == np.array(
@@ -115,7 +115,7 @@ for t in range(4):
     nx.draw(g, pos=pos, with_labels=True)
     plt.show()
 
-distance_matrix = temporal_graph_distance(two_cluster_connectivity_matrix)
+distance_matrix = s_journey(two_cluster_connectivity_matrix)
 # print(distance_matrix)
 
 
@@ -238,18 +238,20 @@ def assign_vertices(distance_matrix: np.ndarray, center_vertices: np.ndarray):
 # penalty for not being connected
 # maximum drift between cluster centers
 
-# stgkm = STGKM(distance_matrix = distance_matrix, penalty = 3, max_drift = 1, k = 2)
-# stgkm.run_stgkm_proxy()
+stgkm = STGKM(distance_matrix = distance_matrix, penalty = 5, max_drift = 1, k = 2, tie_breaker=True)
+stgkm.run_stgkm(method = 'full')
 
-# visualize_graph(connectivity_matrix=two_cluster_connectivity_matrix, labels = stgkm.full_assignments, 
-#                 centers = stgkm.full_centers)
+visualize_graph(connectivity_matrix=two_cluster_connectivity_matrix, labels = stgkm.ltc, 
+                centers = stgkm.full_centers)
 
-for i in range(4):
-    stgkm = STGKM(distance_matrix = distance_matrix[i][np.newaxis, :, :], penalty = 3, max_drift = 1, k = 2)
-    stgkm.run_stgkm()
+print(stgkm.ltc)
 
-    visualize_graph(connectivity_matrix=two_cluster_connectivity_matrix[i][np.newaxis, :, :], labels = stgkm.full_assignments, 
-                    centers = stgkm.full_centers)
+# for i in range(4):
+#     stgkm = STGKM(distance_matrix = distance_matrix[i][np.newaxis, :, :], penalty = 3, max_drift = 1, k = 2)
+#     stgkm.run_stgkm()
+
+#     visualize_graph(connectivity_matrix=two_cluster_connectivity_matrix[i][np.newaxis, :, :], labels = stgkm.full_assignments, 
+#                     centers = stgkm.full_centers)
 
 # print(stgkm.ltc)
 

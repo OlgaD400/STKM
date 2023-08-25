@@ -98,7 +98,7 @@ def perform_clustering(
     runtime = time.time() - start_time
 
     ami, tot_ami = score_predicted_assignments(
-        weights=tkm.weights, k=k, true_labels=true_labels
+        weights=tkm.weights, num_clusters=k, true_labels=true_labels
     )
 
     return ami, tot_ami, runtime, tkm.weights

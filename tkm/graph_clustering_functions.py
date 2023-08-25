@@ -1,12 +1,13 @@
 import numpy as np
 from TKM_long_term_clusters import find_final_label_sc
+from typing import Literal
 import itertools
 import networkx as nx
 import matplotlib.pyplot as plt
-
+from scipy.stats import rankdata
 
 class STGKM:
-    def __init__(self, distance_matrix, penalty, max_drift, k, iter=10):
+    def __init__(self, distance_matrix, penalty, max_drift, k, iter=10, tie_breaker: bool = False):
         self.penalty = penalty
         self.max_drift = max_drift
         self.k = k
@@ -15,7 +16,12 @@ class STGKM:
         self.t, self.n, _ = self.distance_matrix.shape
 
         self.full_centers = np.zeros((self.t, self.k))
-        self.full_assignments = np.zeros((self.t, self.n))
+        self.tie_breaker = tie_breaker
+
+        if self.tie_breaker is True:
+            self.full_assignments = np.zeros((self.t, self.n))
+        else:
+            self.full_assignments = np.zeros((self.t*self.k, self.n))
         self.ltc = np.zeros(self.n)
         self.iter = iter
 
@@ -24,34 +30,72 @@ class STGKM:
             self.distance_matrix == np.inf, self.penalty, self.distance_matrix
         )
         return penalized_distance
+    
+    def assign_points(self, distance_matrix: np.ndarray, centers: np.ndarray):
+        center_distances = distance_matrix[centers, :]
 
-    def first_kmeans(self):
-        init_centers = np.argsort(np.sum(np.sum(self.distance_matrix, axis=2), axis=0))[
+        if self.tie_breaker is True:
+            membership = np.argmin(center_distances, axis = 0)
+        else:
+            min_center_distances = np.min(center_distances, axis = 0)
+            min_center_distances_matrix = np.tile(min_center_distances, (self.k, 1))
+            membership = np.where(center_distances == min_center_distances_matrix, 1, 0)
+        return membership 
+    
+    def choose_centers(self, distance_matrix: np.ndarray, membership: np.ndarray, centers: np.ndarray):
+        """ There's gonna be a bug where the same center can get chosen twice """
+        
+        if self.tie_breaker is False:
+            membership = np.argmax(membership, axis = 0)
+
+        for cluster in range(self.k):
+
+            # if self.tie_breaker is True:
+            members = np.where(membership == cluster)[0]
+            # else:
+            #     members = np.where(membership[cluster] == 1)[0]
+
+            member_distances = np.sum(distance_matrix[members, :][:, members], axis=0)
+
+            if len(member_distances) > 0:
+                # points were assigned to that cluster
+                center_k = members[np.argmin(member_distances)]
+
+            else:
+                center_k = centers[cluster]
+
+            centers[cluster] = center_k
+
+        return centers
+    
+    def calculate_intra_cluster_distance(self, distance_matrix: np.ndarray, membership: np.ndarray, centers: np.ndarray):
+        if self.tie_breaker is True: 
+            members = [
+                np.where(membership == cluster)[0] for cluster in range(self.k)
+            ]
+        else: 
+            members = [np.where(membership[cluster] == 1)[0] for cluster in range(self.k)]
+
+        intra_cluster_sum = np.sum(
+            [
+                np.sum(distance_matrix[center, members])
+                for center, members in zip(centers, members)
+            ]
+        )
+        return intra_cluster_sum
+
+    def first_kmeans(self, distance_matrix):
+        init_centers = np.argsort(np.sum(np.sum(distance_matrix, axis=2), axis=0))[
             : self.k
         ]
-        init_matrix = self.distance_matrix[0]
+        init_matrix = distance_matrix[0]
 
         centers = init_centers.copy()
 
         for iter in range(self.iter):
-            # assign each point to its closest cluster center
-            center_distances = init_matrix[centers, :]
-            membership = np.argmin(center_distances, axis=0)
+            membership = self.assign_points(distance_matrix = init_matrix, centers = centers)
 
-            # reassign centers based on new membership
-            for cluster in range(self.k):
-                members = np.where(membership == cluster)[0]
-
-                member_distances = np.sum(init_matrix[members, :][:, members], axis=0)
-
-                if len(member_distances) > 0:
-                    # points were assigned to that cluster
-                    center_k = members[np.argmin(member_distances)]
-                else:
-                    center_k = centers[cluster]
-
-                centers[cluster] = center_k
-
+            centers = self.choose_centers(distance_matrix = init_matrix, membership = membership, centers = centers)
         return membership, centers
 
     def next_assignment(self, current_centers, previous_distance, current_distance):
@@ -62,17 +106,8 @@ class STGKM:
         ]
 
         # Preference to keep cluster centers the same
-        center_distances = current_distance[current_centers, :]
-        current_membership = np.argmin(center_distances, axis=0)
-        current_members = [
-            np.where(current_membership == cluster)[0] for cluster in range(self.k)
-        ]
-        min_sum = np.sum(
-            [
-                np.sum(current_distance[center, members])
-                for center, members in zip(current_centers, current_members)
-            ]
-        )
+        current_membership = self.assign_points(distance_matrix=current_distance, centers = current_centers)
+        min_sum = self.calculate_intra_cluster_distance(distance_matrix=current_distance, membership = current_membership, centers = current_centers)
         final_members = current_membership
         final_centers = current_centers
 
@@ -80,24 +115,11 @@ class STGKM:
             # all chosen centers are unique
             if len(set(center_combination)) == self.k:
                 # This will iterate through every possible subset of centers
-
-                # Assign each point to its closest cluster center
-                center_distances = current_distance[center_combination, :]
-                membership = np.argmin(center_distances, axis=0)
-
-                # get total sum of distances from vertex in cluster
-                cluster_members = [
-                    np.where(membership == cluster)[0] for cluster in range(self.k)
-                ]
-
-                total_sum = np.sum(
-                    [
-                        np.sum(current_distance[center, members])
-                        for center, members in zip(center_combination, cluster_members)
-                    ]
-                )
+                membership = self.assign_points(distance_matrix=current_distance, centers = center_combination)
+                total_sum = self.calculate_intra_cluster_distance(distance_matrix = current_distance, membership = membership, 
+                                                                  centers = center_combination) 
+                
                 # Return centers with smallest distances from their members
-
                 if total_sum < min_sum:
                     final_centers = center_combination
                     final_members = membership
@@ -114,17 +136,8 @@ class STGKM:
         ]
 
         # Preference to keep cluster centers the same
-        center_distances = current_distance[current_centers, :]
-        current_membership = np.argmin(center_distances, axis=0)
-        current_members = [
-            np.where(current_membership == cluster)[0] for cluster in range(self.k)
-        ]
-        min_sum = np.sum(
-            [
-                np.sum(current_distance[center, members])
-                for center, members in zip(current_centers, current_members)
-            ]
-        )
+        current_membership = self.assign_points(distance_matrix=current_distance, centers = current_centers)
+        min_sum = self.calculate_intra_cluster_distance(distance_matrix=current_distance, membership = current_membership, centers = current_centers)
         final_members = current_membership
 
         for k_index, center_k_possibilities in enumerate(center_connections):
@@ -133,19 +146,9 @@ class STGKM:
                     changing_centers = current_centers.copy()
                     changing_centers[k_index] = possibility
 
-                    membership = np.argmin(current_distance[changing_centers], axis=0)
-                    cluster_members = [
-                        np.where(membership == cluster)[0] for cluster in range(self.k)
-                    ]
-                    curr_sum = np.sum(
-                        [
-                            np.sum(current_distance[center, members])
-                            for center, members in zip(
-                                changing_centers, cluster_members
-                            )
-                        ]
-                    )
-
+                    membership = self.assign_points(distance_matrix=current_distance, centers = changing_centers)
+                    curr_sum = self.calculate_intra_cluster_distance(distance_matrix = current_distance, centers = changing_centers, membership = membership)
+                    
                     if curr_sum < min_sum:
                         min_sum = curr_sum
                         current_centers[k_index] = possibility
@@ -153,60 +156,52 @@ class STGKM:
 
         return final_members, current_centers
 
-    def run_stgkm_proxy(self):
+    def run_stgkm(self, method: Literal['full', 'proxy'] = 'full'):
+        print('Running stgkm')
+
         penalized_distance = self.penalize_distance()
-        current_members, current_centers = self.first_kmeans()
+
+        current_members, current_centers = self.first_kmeans(distance_matrix= penalized_distance)
 
         previous_distance = penalized_distance[0]
 
-        self.full_assignments[0] = current_members
+        if self.tie_breaker is True:
+            self.full_assignments[0] = current_members
+        else:   
+            self.full_assignments[0:self.k, :] = current_members
+
         self.full_centers[0] = current_centers
+
 
         for time in range(1, self.t):
             current_distance = penalized_distance[time]
-            new_members, new_centers = self.next_assignment_proxy(
-                current_centers=current_centers,
-                previous_distance=previous_distance,
-                current_distance=current_distance,
-            )
+
+            if method == 'full':
+                new_members, new_centers = self.next_assignment(
+                    current_centers=current_centers,
+                    previous_distance=previous_distance,
+                    current_distance=current_distance,
+                    )
+            elif method == 'proxy':
+                new_members, new_centers = self.next_assignment_proxy(
+                    current_centers=current_centers,
+                    previous_distance=previous_distance,
+                    current_distance=current_distance,
+                )
 
             self.full_centers[time] = new_centers
-            self.full_assignments[time] = new_members
+            if self.tie_breaker is True:
+                self.full_assignments[time] = new_members
+            else:
+                self.full_assignments[time*(self.k):(time+1)*self.k,:] = new_members
 
             previous_distance = current_distance.copy()
             current_centers = list(new_centers).copy()
 
         self.ltc = find_final_label_sc(weights=self.full_assignments.T, k=self.k)
 
+        print('Finished running stgkm.')
         return None
-
-    def run_stgkm(self):
-        penalized_distance = self.penalize_distance()
-        current_members, current_centers = self.first_kmeans()
-
-        previous_distance = penalized_distance[0]
-
-        self.full_assignments[0] = current_members
-        self.full_centers[0] = current_centers
-
-        for time in range(1, self.t):
-            current_distance = penalized_distance[time]
-            new_members, new_centers = self.next_assignment(
-                current_centers=current_centers,
-                previous_distance=previous_distance,
-                current_distance=current_distance,
-            )
-
-            self.full_centers[time] = new_centers
-            self.full_assignments[time] = new_members
-
-            previous_distance = current_distance.copy()
-            current_centers = list(new_centers).copy()
-
-        self.ltc = find_final_label_sc(weights=self.full_assignments.T, k=self.k)
-
-        return None
-
 
 def visualize_graph(
     connectivity_matrix: np.ndarray,
