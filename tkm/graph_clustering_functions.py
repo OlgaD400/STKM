@@ -50,18 +50,23 @@ class STGKM:
 
         #Randomly assign points with multi-membership to a single cluster
         if self.tie_breaker is False:
-            membership = [random.choice(np.where(membership[:,col] >0 )[0]) for col in range(self.n)]
-
+            single_membership = np.array([random.choice(np.where(membership[:,col] >0 )[0]) for col in range(self.n)])
+                
         for cluster in range(self.k):
-            
+            # print('randomly chosen', single_membership)
+            # print("is this empty", np.where(single_membership == 0))
+
             #Get all members of a cluster
             # if self.tie_breaker is True:
-            members = np.where(membership == cluster)[0]
+            members = np.where(single_membership == cluster)[0]
+            # print('members', members)
             # else:
             #     members = np.where(membership[cluster] == 1)[0]
 
             #Calculate distance between that point and all members in the cluster
             member_distances = np.sum(distance_matrix[members, :][:, members], axis=0)
+            
+            # print('member distances', member_distances)
 
             if len(member_distances) > 0:
                 # points were assigned to that cluster
