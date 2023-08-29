@@ -10,7 +10,7 @@ from tkm.graph_clustering_functions import STGKM, visualize_graph
 NUMNODES = 8
 TIMESTEPS = 100
 
-WS = WattsStrogatz(num_nodes=NUMNODES, num_neighbors=2, probability=0.20)
+WS = WattsStrogatz(num_nodes=NUMNODES, num_neighbors=4, probability=0.20)
 connectivity_matrix = np.zeros((TIMESTEPS, NUMNODES, NUMNODES))
 
 for time in range(TIMESTEPS):
@@ -28,17 +28,18 @@ distance_matrix = s_journey(connectivity_matrix=connectivity_matrix)
 subset_distance_matrix = distance_matrix[:SUBSET, :,:]
 penalty = np.unique(subset_distance_matrix)[-2] + 1
 
-stgkm = STGKM(distance_matrix=subset_distance_matrix, penalty=penalty, max_drift=1, k=2)
+stgkm = STGKM(distance_matrix=subset_distance_matrix, penalty=penalty, max_drift=1, k=3, tie_breaker = False, 
+              iter = 100)
 
 stgkm.run_stgkm(method = 'full')
 print(stgkm.ltc)
 
 
-# visualize_graph(
-#     connectivity_matrix=connectivity_matrix[:SUBSET, :, :],
-#     labels=stgkm.ltc,
-#     centers=stgkm.full_centers,
-# )
+visualize_graph(
+    connectivity_matrix=connectivity_matrix[:SUBSET, :, :],
+    labels=stgkm.ltc,
+    centers=stgkm.full_centers,
+)
 
 
 ##############

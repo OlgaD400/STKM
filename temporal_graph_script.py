@@ -107,6 +107,22 @@ two_cluster_connectivity_matrix = np.array(
     ]
 )
 
+def generate_two_cluster_dynamics(num_nodes_1, num_nodes_2, timesteps, discont_probability, connect_probability):
+    clust_1 = np.ones((num_nodes_1, num_nodes_1))
+    zeros = np.zeros((num_nodes_1, num_nodes_2))
+    clust_2 = np.ones((num_nodes_2,num_nodes_2))
+
+    connectivity_slice = np.block([[clust_1, zeros], [zeros.T, clust_2]])
+    connectivity_matrix = np.tile(connectivity_slice, (timesteps, 1, 1))
+    total_population = num_nodes_1 + num_nodes_2
+
+    for time in timesteps:
+        for row in total_population:
+            for connectivity_matrix in total_population:
+                pass
+
+    return None
+
 
 g = nx.Graph(two_cluster_connectivity_matrix[0])
 pos = nx.spring_layout(g)
@@ -238,7 +254,8 @@ def assign_vertices(distance_matrix: np.ndarray, center_vertices: np.ndarray):
 # penalty for not being connected
 # maximum drift between cluster centers
 
-stgkm = STGKM(distance_matrix = distance_matrix, penalty = 5, max_drift = 1, k = 2, tie_breaker=True)
+stgkm = STGKM(distance_matrix = distance_matrix, penalty = 5, max_drift = 1, k = 2, tie_breaker=False,
+              iter = 100)
 stgkm.run_stgkm(method = 'full')
 
 visualize_graph(connectivity_matrix=two_cluster_connectivity_matrix, labels = stgkm.ltc, 

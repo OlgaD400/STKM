@@ -5,6 +5,7 @@ import itertools
 import networkx as nx
 import matplotlib.pyplot as plt
 from scipy.stats import rankdata
+import random
 
 class STGKM:
     def __init__(self, distance_matrix, penalty, max_drift, k, iter=10, tie_breaker: bool = False):
@@ -40,21 +41,26 @@ class STGKM:
             min_center_distances = np.min(center_distances, axis = 0)
             min_center_distances_matrix = np.tile(min_center_distances, (self.k, 1))
             membership = np.where(center_distances == min_center_distances_matrix, 1, 0)
+
+            # membership = membership/np.sum(membership, axis = 0)
         return membership 
     
     def choose_centers(self, distance_matrix: np.ndarray, membership: np.ndarray, centers: np.ndarray):
         """ There's gonna be a bug where the same center can get chosen twice """
-        
+
+        #Randomly assign points with multi-membership to a single cluster
         if self.tie_breaker is False:
-            membership = np.argmax(membership, axis = 0)
+            membership = [random.choice(np.where(membership[:,col] >0 )[0]) for col in range(self.n)]
 
         for cluster in range(self.k):
-
+            
+            #Get all members of a cluster
             # if self.tie_breaker is True:
             members = np.where(membership == cluster)[0]
             # else:
             #     members = np.where(membership[cluster] == 1)[0]
 
+            #Calculate distance between that point and all members in the cluster
             member_distances = np.sum(distance_matrix[members, :][:, members], axis=0)
 
             if len(member_distances) > 0:
@@ -73,30 +79,42 @@ class STGKM:
             members = [
                 np.where(membership == cluster)[0] for cluster in range(self.k)
             ]
-        else: 
-            members = [np.where(membership[cluster] == 1)[0] for cluster in range(self.k)]
 
-        intra_cluster_sum = np.sum(
+            intra_cluster_sum = np.sum(
             [
-                np.sum(distance_matrix[center, members])
-                for center, members in zip(centers, members)
+                np.sum(distance_matrix[center, cluster_members])
+                for center, cluster_members in zip(centers, members)
             ]
         )
+        else: 
+
+            intra_cluster_sum = np.sum(np.where(membership == 1, distance_matrix[centers, :], 0))
+
         return intra_cluster_sum
 
     def first_kmeans(self, distance_matrix):
+        #Choose points that are most connected to all other points thorughout time as initial centers
         init_centers = np.argsort(np.sum(np.sum(distance_matrix, axis=2), axis=0))[
             : self.k
         ]
         init_matrix = distance_matrix[0]
 
-        centers = init_centers.copy()
+        curr_centers = init_centers.copy()
 
         for iter in range(self.iter):
-            membership = self.assign_points(distance_matrix = init_matrix, centers = centers)
+            membership = self.assign_points(distance_matrix = init_matrix, centers = curr_centers)
 
-            centers = self.choose_centers(distance_matrix = init_matrix, membership = membership, centers = centers)
-        return membership, centers
+            new_centers = self.choose_centers(distance_matrix = init_matrix, membership = membership, centers = curr_centers)
+
+            if (new_centers == curr_centers).all():
+                return membership, curr_centers
+            
+            curr_centers = new_centers.copy()
+
+            if iter == self.iter -1:
+                print('reached max iterations')
+
+        return membership, curr_centers
 
     def next_assignment(self, current_centers, previous_distance, current_distance):
         # Find all vertices that are within max_drift distance of each current center
