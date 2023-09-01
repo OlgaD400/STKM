@@ -202,13 +202,15 @@ class STGKM:
                     changing_centers = current_centers.copy()
                     changing_centers[k_index] = possibility
 
-                    membership = self.assign_points(distance_matrix=current_distance, centers = changing_centers)
-                    curr_sum = self.calculate_intra_cluster_distance(distance_matrix = current_distance, centers = changing_centers, membership = membership)
-                    
-                    if curr_sum < min_sum:
-                        min_sum = curr_sum
-                        current_centers[k_index] = possibility
-                        final_members = membership
+                    #Ensure that there are k unique cluster centers to make it a valid possibility
+                    if len(set(changing_centers)) == self.k:
+                        membership = self.assign_points(distance_matrix=current_distance, centers = changing_centers)
+                        curr_sum = self.calculate_intra_cluster_distance(distance_matrix = current_distance, centers = changing_centers, membership = membership)
+                        
+                        if curr_sum < min_sum:
+                            min_sum = curr_sum
+                            current_centers[k_index] = possibility
+                            final_members = membership
 
         return final_members, current_centers
 
