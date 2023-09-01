@@ -107,6 +107,11 @@ two_cluster_connectivity_matrix = np.array(
     ]
 )
 
+cluster = np.ones((3,3))
+zeros = np.zeros((3,3))
+two_clusters = np.block([[cluster, zeros], [zeros, cluster]])
+two_cluster_connectivity_matrix = np.repeat([two_clusters], 20, axis = 0)
+
 def generate_two_cluster_dynamics(num_nodes_1, num_nodes_2, timesteps, discont_probability, connect_probability):
     clust_1 = np.ones((num_nodes_1, num_nodes_1))
     zeros = np.zeros((num_nodes_1, num_nodes_2))
@@ -126,10 +131,10 @@ def generate_two_cluster_dynamics(num_nodes_1, num_nodes_2, timesteps, discont_p
 
 g = nx.Graph(two_cluster_connectivity_matrix[0])
 pos = nx.spring_layout(g)
-for t in range(4):
-    g = nx.Graph(two_cluster_connectivity_matrix[t])
-    nx.draw(g, pos=pos, with_labels=True)
-    plt.show()
+# for t in range(4):
+#     g = nx.Graph(two_cluster_connectivity_matrix[t])
+#     nx.draw(g, pos=pos, with_labels=True)
+#     plt.show()
 
 distance_matrix = s_journey(two_cluster_connectivity_matrix)
 # print(distance_matrix)
@@ -258,8 +263,8 @@ stgkm = STGKM(distance_matrix = distance_matrix, penalty = 5, max_drift = 1, k =
               iter = 100)
 stgkm.run_stgkm(method = 'full')
 
-visualize_graph(connectivity_matrix=two_cluster_connectivity_matrix, labels = stgkm.ltc, 
-                centers = stgkm.full_centers)
+# visualize_graph(connectivity_matrix=two_cluster_connectivity_matrix, labels = stgkm.ltc, 
+#                 centers = stgkm.full_centers)
 
 print(stgkm.ltc)
 
