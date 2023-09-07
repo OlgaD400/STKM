@@ -28,18 +28,18 @@ distance_matrix = s_journey(connectivity_matrix=connectivity_matrix)
 subset_distance_matrix = distance_matrix[:SUBSET, :,:]
 penalty = SUBSET
 
-stgkm = STGKM(distance_matrix=subset_distance_matrix, penalty=penalty, max_drift=1, k=2, tie_breaker = False, 
-              iter = 100)
+stgkm = STGKM(distance_matrix=subset_distance_matrix, penalty=penalty, max_drift=1, k=2, tie_breaker = True, 
+              iterations = 100)
 
 stgkm.run_stgkm(method = 'full')
 print(stgkm.ltc)
 
 
-# visualize_graph(
-#     connectivity_matrix=connectivity_matrix[:SUBSET, :, :],
-#     labels=stgkm.ltc,
-#     centers=stgkm.full_centers,
-# )
+visualize_graph(
+    connectivity_matrix=connectivity_matrix[:SUBSET, :, :],
+    labels=stgkm.full_assignments,
+    centers=stgkm.full_centers,
+)
 
 def illustrate_connectivity(connectivity_matrix, t, ltc):
     timeslice = connectivity_matrix[t]

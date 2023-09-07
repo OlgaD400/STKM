@@ -3,7 +3,7 @@ import xmltodict
 import pandas as pd
 import numpy as np
 
-final_data = {'time': [], 'legislator': [], 'party': [], 'vote':[]}
+final_data = {'time': [], 'legislator': [], 'party': [], 'vote':[], 'last_name': []}
 for roll_call_id in range(100, 383):
     url = 'https://clerk.house.gov/evs/2023/roll' + str(roll_call_id) + '.xml'
 
@@ -13,6 +13,7 @@ for roll_call_id in range(100, 383):
     for voter in vote_data['rollcall-vote']['vote-data']['recorded-vote']:
         final_data['time'].append(roll_call_id - 100)
         final_data['legislator'].append(voter['legislator']['@name-id'])
+        final_data['last_name'].append(voter['legislator']['@sort-field'])
         final_data['party'].append(voter['legislator']['@party'])
         final_data['vote'].append(voter['vote'])
 
@@ -35,7 +36,7 @@ for time in range(283):
     yes_voters = curr_timeslice[curr_timeslice['vote'].isin(['Yea', 'Aye'])]['legislator']
     no_voters = curr_timeslice[curr_timeslice['vote'].isin(['No', 'Nay'])]['legislator']
     present_voters = curr_timeslice[curr_timeslice['vote'] == 'Present']['legislator']
-
+    not_voting = curr_timeslice[curr_timeslice['vote'] == 'Not Voting']['legislator']
 
     #If they vote the same, they are connected
     for voter_1 in yes_voters:
@@ -54,7 +55,12 @@ for time in range(283):
             connectivity_matrix[time, voter_dictionary[voter_1], voter_dictionary[voter_2]] = 1
             connectivity_matrix[time, voter_dictionary[voter_2], voter_dictionary[voter_1]] = 1
 
+    for voter_1 in not_voting:
+        for voter_2 in not_voting:
+            connectivity_matrix[time, voter_dictionary[voter_1], voter_dictionary[voter_2]] = 1
+            connectivity_matrix[time, voter_dictionary[voter_2], voter_dictionary[voter_1]] = 1
+
 
 final_voter_data.to_csv('final_voter_data.csv')
 fvd_0.to_csv('fvd_0')
-np.save('roll_call_connectivity.npy', connectivity_matrix)
+np.save('roll_call_connectivity_2.npy', connectivity_matrix)
