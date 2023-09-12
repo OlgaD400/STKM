@@ -1,7 +1,7 @@
+"""Temporal Graph Clustering Script"""
 import random
 import networkx as nx
 import numpy as np
-import matplotlib.pyplot as plt
 from distance_functions import s_journey
 from tkm.graph_clustering_functions import STGKM, visualize_graph
 
@@ -21,7 +21,9 @@ def three_cluster_connectivity(pop_size:int, num_changes:int) -> np.ndarray:
     """
     cluster = np.ones((pop_size,pop_size))
     zeros = np.zeros((pop_size,pop_size))
-    three_clusters = np.block([[cluster, zeros, zeros], [zeros, cluster, zeros] ,[zeros, zeros, cluster]])
+    three_clusters = np.block([[cluster, zeros, zeros],
+                               [zeros, cluster, zeros],
+                               [zeros, zeros, cluster]])
     cluster_connectivity_matrix = np.repeat([three_clusters], 20, axis = 0)
 
     for time_slice in range(20):
@@ -79,22 +81,21 @@ two_cluster_connectivity_matrix = np.array(
             [0, 0, 0, 1, 1, 0],
         ],
     ]
-)
-                                    
-# three_cluster_connectivity_matrix = three_cluster_connectivity(pop_size = 10, num_changes = 30)
+)                              
+#three_cluster_connectivity_matrix = three_cluster_connectivity(pop_size = 10,
+#num_changes = 30)
 
 g = nx.Graph(two_cluster_connectivity_matrix[0])
 pos = nx.spring_layout(g)
 
 visualize_graph(connectivity_matrix= two_cluster_connectivity_matrix)
-
 distance_matrix = s_journey(two_cluster_connectivity_matrix)
 
-stgkm = STGKM(distance_matrix = distance_matrix[:10], penalty = 8, max_drift = 1, center_connectivity = 1, k = 3, tie_breaker=False,
+stgkm = STGKM(distance_matrix = distance_matrix[:10], penalty = 8, max_drift = 1,
+              center_connectivity = 1, k = 3, tie_breaker=False,
               iterations = 100)
 stgkm.run_stgkm(method = 'full')
 
-visualize_graph(connectivity_matrix=two_cluster_connectivity_matrix, labels = stgkm.ltc, 
+visualize_graph(connectivity_matrix=two_cluster_connectivity_matrix, labels = stgkm.ltc,
                 centers = stgkm.full_centers)
-
 print(stgkm.ltc)
