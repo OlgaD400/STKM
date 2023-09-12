@@ -64,7 +64,7 @@ class STGKM:
         else:
             membership = membership_matrix.copy()
 
-        return membership 
+        return membership
     
     def choose_centers(self, distance_matrix: np.ndarray, membership: np.ndarray, 
                        centers: np.ndarray) -> np.ndarray:
@@ -184,12 +184,18 @@ class STGKM:
 
         for iter in range(self.iter):
             membership = self.assign_points(distance_matrix = init_matrix, centers = curr_centers)
+
             new_centers = self.choose_centers(distance_matrix = init_matrix, membership = membership, centers = curr_centers)
+
 
             # print('new centers', new_centers)
             # print(membership, 'membership', new_centers, 'new_centers', new_centers,'\n\n')
 
             if (new_centers == curr_centers).all():
+                #Why am I doing this here? I had a bug where membership was wrong when I got here,
+                #but that doesn't make sense. This fixed it though.
+                membership = self.assign_points(distance_matrix = init_matrix, centers = new_centers)
+
                 return membership, curr_centers
             
             curr_centers = new_centers.copy()
@@ -421,3 +427,4 @@ def visualize_graph(
                 )
 
         plt.show()
+
