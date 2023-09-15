@@ -2,8 +2,8 @@
 import random
 import networkx as nx
 import numpy as np
-from distance_functions import s_journey
-from tkm.graph_clustering_functions import STGKM, visualize_graph
+from stgkm.distance_functions import s_journey
+from stgkm.graph_clustering_functions import STGKM, visualize_graph
 
 
 def three_cluster_connectivity(pop_size:int, num_changes:int) -> np.ndarray:
