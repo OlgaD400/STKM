@@ -10,7 +10,7 @@ from TKM_long_term_clusters import find_final_label_sc
 
 class STGKM:
     """Implement Spatiotemporal Graph k-means (STGkM)"""
-    def __init__(self, 
+    def __init__(self,
                  distance_matrix: np.ndarray,
                  penalty: float,
                  max_drift: int,
@@ -56,7 +56,6 @@ class STGKM:
             self.distance_matrix == np.inf, self.penalty, self.distance_matrix
         )
         return penalized_distance
-    
     def assign_points(self, distance_matrix: np.ndarray, centers: np.ndarray) -> np.ndarray:
         """
         Assign each point to its closest cluster center.
@@ -75,9 +74,6 @@ class STGKM:
         # print('center dist', center_distances, '\n\n', 'min dist', min_center_distances, '\n\n')
         
         membership_matrix = np.where(center_distances == min_center_distances_matrix, 1, 0)
-        
-        # print('selected memberhsip matrix', membership_matrix)
-        
         if self.tie_breaker is True:
             membership = np.array([random.choice(np.where(membership_matrix[:,col] >0 )[0]) for col in range(self.num_vertices)])
         else:
@@ -85,7 +81,7 @@ class STGKM:
 
         return membership
     
-    def choose_centers(self, distance_matrix: np.ndarray, membership: np.ndarray, 
+    def choose_centers(self, distance_matrix: np.ndarray, membership: np.ndarray,
                        centers: np.ndarray) -> np.ndarray:
         """ 
         Choose centers as points which have the minimum total distance to all other points in cluster
@@ -362,9 +358,9 @@ def visualize_graph(
     if len(np.unique(labels)) > len(color_dict):
         raise Exception("Color dictionary requires more than 4 labels")
 
-    g0 = nx.Graph(connectivity_matrix[0])
-    g0.remove_edges_from(nx.selfloop_edges(g0))
-    pos = nx.spring_layout(g0)
+    g_0 = nx.Graph(connectivity_matrix[0])
+    g_0.remove_edges_from(nx.selfloop_edges(g_0))
+    pos = nx.spring_layout(g_0)
 
     for time in range(timesteps):
         plt.figure(figsize = figsize)
@@ -406,4 +402,3 @@ def visualize_graph(
                 )
 
         plt.show()
-
