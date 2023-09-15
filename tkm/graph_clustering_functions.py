@@ -1,32 +1,57 @@
-import numpy as np
-from TKM_long_term_clusters import find_final_label_sc
-from typing import Literal
+"""Graph Clustering Functions"""
+from typing import Literal, List
 import itertools
+import random
 import networkx as nx
 import matplotlib.pyplot as plt
-import random
+import numpy as np
+from TKM_long_term_clusters import find_final_label_sc
+
 
 class STGKM:
-    def __init__(self, distance_matrix, penalty, max_drift, k, iterations=10, center_connectivity=1, tie_breaker: bool = False):
+    """Implement Spatiotemporal Graph k-means (STGkM)"""
+    def __init__(self, 
+                 distance_matrix: np.ndarray,
+                 penalty: float,
+                 max_drift: int,
+                 num_clusters: int,
+                 iterations: int = 10,
+                 drift_time_window: int = 1,
+                 tie_breaker: bool = False):
+        """
+        Initialize STGkM.
+
+        Args:
+            distance_matrix (np.ndarray):  Distance between all pairs of vertices.
+            penalty (float): Penalty to assign to disconnected vertices during pre-processing.
+            max_drift (int): Maximum distance between cluster centers over time.
+            num_clusters (int): Number of clusters for STGkM.
+            iterations (int): Max. iterations for first k-means run.
+            drift_time_window (int): Number of timesteps centers must remain within max_drift of one another.
+            tie_breaker (bool): Whether to force unique vertex assignment.
+        """
         self.penalty = penalty
         self.max_drift = max_drift
-        self.k = k
+        self.k = num_clusters
         self.distance_matrix = distance_matrix
-        self.center_connectivity = center_connectivity
+        self.center_connectivity = drift_time_window
 
-        self.t, self.n, _ = self.distance_matrix.shape
+        self.timesteps, self.num_vertices, _ = self.distance_matrix.shape
 
-        self.full_centers = np.zeros((self.t, self.k))
+        self.full_centers = np.zeros((self.timesteps, self.k))
         self.tie_breaker = tie_breaker
 
         if self.tie_breaker is True:
-            self.full_assignments = np.zeros((self.t, self.n))
+            self.full_assignments = np.zeros((self.timesteps, self.num_vertices))
         else:
-            self.full_assignments = np.zeros((self.t*self.k, self.n))
-        self.ltc = np.zeros(self.n)
+            self.full_assignments = np.zeros((self.timesteps*self.k, self.num_vertices))
+        self.ltc = np.zeros(self.num_vertices)
         self.iter = iterations
 
     def penalize_distance(self):
+        """
+        Pre-processing step. Assign penalty distance to disconnected vertices.
+        """
         penalized_distance = np.where(
             self.distance_matrix == np.inf, self.penalty, self.distance_matrix
         )
@@ -36,18 +61,12 @@ class STGKM:
         """
         Assign each point to its closest cluster center.
 
-        If self.tie_breaker is true, each point can only be assinged to one cluster. Else, a point can
-        be assigned to multiple clusters
-
         Args:
-            distance_matrix (np.ndarray): Distance between all pairs of points
+            distance_matrix (np.ndarray): Distance between all pairs of vertices
             centers (np.ndarray): Indices of cluster centers
         
         Returns:
-            membership (np.ndarray) Array containing binary assignment matrix with a 1 at index i,j
-                if point i belongs to cluster j
-
-
+            membership (np.ndarray) Array containing binary assignment matrix with a 1 at index i,j if point i belongs to cluster j
         """
         center_distances = distance_matrix[centers, :]
         min_center_distances = np.min(center_distances, axis = 0)
@@ -60,7 +79,7 @@ class STGKM:
         # print('selected memberhsip matrix', membership_matrix)
         
         if self.tie_breaker is True:
-            membership = np.array([random.choice(np.where(membership_matrix[:,col] >0 )[0]) for col in range(self.n)])
+            membership = np.array([random.choice(np.where(membership_matrix[:,col] >0 )[0]) for col in range(self.num_vertices)])
         else:
             membership = membership_matrix.copy()
 
@@ -82,19 +101,10 @@ class STGKM:
         """
         #Randomly assign points with multi-membership to a single cluster
         if self.tie_breaker is False:
-            membership = np.array([random.choice(np.where(membership[:,col] >0 )[0]) for col in range(self.n)])
-
-        # print('random membership', membership, '\n\n')
+            membership = np.array([random.choice(np.where(membership[:,col] >0 )[0]) for col in range(self.num_vertices)])
 
         for cluster in range(self.k):
-            # print('randomly chosen', single_membership)
-            # print("is this empty", np.where(single_membership == 0))
-
-            #Get all members of a cluster
-            # if self.tie_breaker is True:
             members = np.where(membership == cluster)[0]
-            # else:
-            #     members = np.where(membership[cluster] == 1)[0]
 
             #Calculate distance between that point and all members in the cluster
             member_distances = np.sum(distance_matrix[members, :][:, members], axis=0)
@@ -118,10 +128,10 @@ class STGKM:
     def calculate_intra_cluster_distance(self, distance_matrix: np.ndarray,
                                          membership: np.ndarray, centers: np.ndarray) -> float:
         """
-        Calculate the sum of the average distance between points and their cluster center. 
+        Calculate the sum of the average distance between vertices and their cluster center. 
 
         Args:
-            distance_matrix (np.ndarray): Distance between all pairs of points
+            distance_matrix (np.ndarray): Distance between all pairs of vertices
             membership (np.ndarray) Array containing binary assignment matrix with a 1 at index i,j
                 if point i belongs to cluster j
             centers (np.ndarray): Indices of cluster centers
@@ -129,15 +139,6 @@ class STGKM:
         Returns:
             intra_cluster_sum (float): Sum of average distances of points to their centers
         """
-        # #Find the distance from centers to members of their cluster 
-        # point_distance_from_center = np.where(membership == 1, distance_matrix[centers, :], np.nan)
-        
-        # #Find average distance of members from their cluster centers
-        # average_member_distance_from_center = np.nanmean(point_distance_from_center, axis = 1)
-        
-        # #Sum together average distances over all clusters
-        # intra_cluster_sum = np.sum(average_member_distance_from_center)
-
 
         intra_cluster_sum = np.sum(np.where(membership == 1, distance_matrix[centers, :], 0))
         return intra_cluster_sum
@@ -154,42 +155,19 @@ class STGKM:
                 if point i belongs to cluster j
             current_centers (np.ndarray): Indices of cluster centers
         """
-        #Choose points that are most connected to all other points thorughout time as initial centers
-        # init_centers = np.argsort(np.sum(np.sum(distance_matrix, axis=2), axis=0))[
-        #     : self.k
-        # ]
-
-        # print('init centers', init_centers)
-        # Choose points that are most connected to all other points at t0
-        # init_centers = np.argsort(np.sum(distance_matrix[0], axis = 1))[:self.k]
         point_distances = np.sum(distance_matrix[0], axis = 1)
         min_point_distance = np.sort(point_distances)[self.k]
         potential_centers = np.where(point_distances <= min_point_distance)[0]
         init_centers = random.sample(list(potential_centers), self.k)
         init_centers = np.array(init_centers)
 
-        # init_centers = np.zeros(self.k)
-        
-        # point_distances = np.sum(distance_matrix[0], axis = 1)
-        # unique_point_distances = np.sort(np.unique(point_distances))[:self.k]
-        # for index, unique_distance in enumerate(unique_point_distances):
-        #     potential_centers = np.where(point_distances == unique_distance)[0]
-        #     init_centers[index] = random.sample(list(potential_centers), 1)[0]
-
-        # init_centers = init_centers.astype(int)
-
-        # print('initial chosen centers', init_centers)
         init_matrix = distance_matrix[0]
         curr_centers = init_centers.copy()
 
-        for iter in range(self.iter):
+        for iterations in range(self.iter):
             membership = self.assign_points(distance_matrix = init_matrix, centers = curr_centers)
 
             new_centers = self.choose_centers(distance_matrix = init_matrix, membership = membership, centers = curr_centers)
-
-
-            # print('new centers', new_centers)
-            # print(membership, 'membership', new_centers, 'new_centers', new_centers,'\n\n')
 
             if (new_centers == curr_centers).all():
                 #Why am I doing this here? I had a bug where membership was wrong when I got here,
@@ -200,14 +178,22 @@ class STGKM:
             
             curr_centers = new_centers.copy()
 
-            if iter == self.iter -1:
+            if iterations == self.iter -1:
                 print('reached max iterations')
 
         return membership, curr_centers
     
-    def find_center_connections(self, current_centers: np.ndarray, distance_matrix: np.ndarray, time: int): 
+    def find_center_connections(self, current_centers: np.ndarray, distance_matrix: np.ndarray, time: int) -> List[List[int]]: 
         """
         Find centers connected at least p time steps with max drift between timesteps
+
+        Args:
+            current_centers (np.ndarray): Current cluster centers.
+            distance_matrix (np.ndarray): Distances between all pairs of vertices.
+            time (int): Current time step. 
+
+        Returns:
+            center_connections List[List[int]]: List, where each entry contains list of all vertices connected to previous center.
         """
 
         drift_time_slices = distance_matrix[(time - self.center_connectivity): time]
@@ -215,27 +201,25 @@ class STGKM:
 
         center_connections = [np.where(np.sum(drift_time_slices[:, center], axis = 0) <= target_sum)[0] for center in current_centers]
 
-        # previous_distance = distance_matrix[time-1]
-        # center_connections = [
-        #     np.where(previous_distance[center, :] <= self.max_drift)[0]
-        #     for center in current_centers
-        # ]
-
         return center_connections
 
     def next_assignment_proxy(self, current_centers, distance_matrix: np.ndarray, time: int):
         """
-        Get assingment at time
+        Assign points to new cluster centers. Approximate approach.
+
+        Args:
+            current_centers (np.ndarray): Current cluster centers.
+            distance_matrix (np.ndarray): Distances between all pairs of vertices.
+            time (int): Current time step. 
+
+        Returns:
+            final_members (np.ndarray): Cluster membership for new centers. 
+            current_centers (np.ndarray): New centers at current time.
         """
 
         center_connections = self.find_center_connections(current_centers = current_centers, 
                                                      distance_matrix = distance_matrix,
                                                      time = time)
-        
-        # center_connections = [
-        #     np.where(previous_distance[center, :] <= self.max_drift)[0]
-        #     for center in current_centers
-        # ]
 
         current_distance = distance_matrix[time]
 
@@ -265,40 +249,32 @@ class STGKM:
                             current_centers[k_indices[shuffled_index]] = possibility
                             final_members = membership
 
-        # print('distances', np.sum(np.where(final_members == 1, current_distance[current_centers, :], 0), axis = 1))
-        # print('counts', np.sum(np.where(final_members == 1, 1, 0), axis = 1))
-        # checked_centers = self.choose_centers(distance_matrix = current_distance, membership = final_members,
-        #                                                  centers = current_centers)
         return final_members, current_centers
 
     def next_assignment(self, current_centers: np.ndarray,
                         distance_matrix: np.ndarray,
                         time: int):
         """
-        Assign points at every timestep t based on assignments at timestep t-1
+        Assign points at current time.
 
         Args: 
             current_centers (np.ndarray): Indices of cluster centers at current timestep 
+            distance_matrix (np.ndarray): Distance between all pairs of vertices.
+            time (int): Current time. 
 
         Returns:
-            final_members (np.ndarray):  Array containing binary assignment matrix with a 1 at index i,j
-                if point i belongs to cluster j. Assignment for time t
+            final_members (np.ndarray):  Binary assignment matrix with a 1 at index i,j
+                if point i belongs to cluster j. Assignment for current time. 
             final_centers (np.ndarray): Indices of cluster centers at current timestep 
         """
-        # Find all vertices that are within max_drift distance of each current center
-
+        # Find all vertices that are connected to the current center. 
         center_connections = self.find_center_connections(current_centers = current_centers,
                                                      distance_matrix = distance_matrix,
                                                      time = time)
         
 
         current_distance = distance_matrix[time]
-        # center_connections = [
-        #     np.where(previous_distance[center, :] <= self.max_drift)[0]
-        #     for center in current_centers
-        # ]
 
-        # Preference to keep cluster centers the same
         current_membership = self.assign_points(distance_matrix=current_distance, centers = current_centers)        
         min_sum = self.calculate_intra_cluster_distance(distance_matrix=current_distance,
                                                         membership = current_membership,
@@ -312,8 +288,7 @@ class STGKM:
                 # This will iterate through every possible subset of centers
                 membership = self.assign_points(distance_matrix=current_distance, centers = center_combination)
                 total_sum = self.calculate_intra_cluster_distance(distance_matrix = current_distance, membership = membership, 
-                                                                  centers = center_combination) 
-                                
+                                                                  centers = center_combination)
                 # Return centers with smallest average distances from their members
                 if total_sum < min_sum:
                     final_centers = center_combination
@@ -324,14 +299,15 @@ class STGKM:
     def run_stgkm(self, method: Literal['full', 'proxy'] = 'full'):
         """
         Run STGkM.
+
+        Args:
+            method (Literal['full', 'proxy']): Whether to run STGkM with optimal or approximate assignment.
         """
         print('Running stgkm')
 
         penalized_distance = self.penalize_distance()
 
         current_members, current_centers = self.first_kmeans(distance_matrix= penalized_distance)
-
-        previous_distance = penalized_distance[0]
 
         if self.tie_breaker is True:
             self.full_assignments[0] = current_members
@@ -341,7 +317,7 @@ class STGKM:
         self.full_centers[0] = current_centers
 
 
-        for time in range(1, self.t):
+        for time in range(1, self.timesteps):
             if time%10 == 0:
                 print('Processing time', time)
 
@@ -378,7 +354,10 @@ def visualize_graph(
     color_dict={0: "red", 1: "gray", 2: "green", 3: "blue", -1: "cyan"},
     figsize = (10,10)
 ):
-    t, n, _ = connectivity_matrix.shape
+    """
+    Visualize the dynamic graph at each time step. 
+    """
+    timesteps, num_vertices, _ = connectivity_matrix.shape
 
     if len(np.unique(labels)) > len(color_dict):
         raise Exception("Color dictionary requires more than 4 labels")
@@ -387,40 +366,40 @@ def visualize_graph(
     g0.remove_edges_from(nx.selfloop_edges(g0))
     pos = nx.spring_layout(g0)
 
-    for time in range(t):
+    for time in range(timesteps):
         plt.figure(figsize = figsize)
         # No labels
         if len(labels) == 0:
             nx.draw(nx.Graph(connectivity_matrix[time]), pos=pos, with_labels=True)
         # Static long term labels
-        elif len(labels) == n:
-            g = nx.Graph(connectivity_matrix[time])
-            g.remove_edges_from(nx.selfloop_edges(g))
+        elif len(labels) == num_vertices:
+            graph = nx.Graph(connectivity_matrix[time])
+            graph.remove_edges_from(nx.selfloop_edges(graph))
             nx.draw(
-                g,
+                graph,
                 pos=pos,
                 node_color=[color_dict[label] for label in labels],
                 with_labels=True,
             )
         # Changing labels at each time step
-        elif len(labels) == t:
+        elif len(labels) == timesteps:
             if len(centers) != 0:
-                center_size = np.ones(n) * 300
+                center_size = np.ones(num_vertices) * 300
                 center_size[centers[time].astype(int)] = 500
-                g = nx.Graph(connectivity_matrix[time])
-                g.remove_edges_from(nx.selfloop_edges(g))
+                graph = nx.Graph(connectivity_matrix[time])
+                graph.remove_edges_from(nx.selfloop_edges(graph))
                 nx.draw(
-                    g,
+                    graph,
                     pos=pos,
                     node_color=[color_dict[label] for label in labels[time]],
                     node_size=center_size,
                     with_labels=True,
                 )
             else:
-                g = nx.Graph(connectivity_matrix[time])
-                g.remove_edges_from(nx.selfloop_edges(g))
+                graph = nx.Graph(connectivity_matrix[time])
+                graph.remove_edges_from(nx.selfloop_edges(graph))
                 nx.draw(
-                    g,
+                    graph,
                     pos=pos,
                     node_color=[color_dict[label] for label in labels[time]],
                     with_labels=True,
