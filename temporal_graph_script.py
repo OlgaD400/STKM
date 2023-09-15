@@ -92,7 +92,7 @@ visualize_graph(connectivity_matrix= two_cluster_connectivity_matrix)
 distance_matrix = s_journey(two_cluster_connectivity_matrix)
 
 stgkm = STGKM(distance_matrix = distance_matrix[:10], penalty = 8, max_drift = 1,
-              center_connectivity = 1, k = 3, tie_breaker=False,
+              drift_time_window = 1, num_clusters = 3, tie_breaker=False,
               iterations = 100)
 stgkm.run_stgkm(method = 'full')
 

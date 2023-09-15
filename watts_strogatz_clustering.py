@@ -28,7 +28,7 @@ distance_matrix = s_journey(connectivity_matrix=connectivity_matrix)
 subset_distance_matrix = distance_matrix[:SUBSET, :,:]
 penalty = SUBSET
 
-stgkm = STGKM(distance_matrix=subset_distance_matrix, penalty=penalty, max_drift=1, k=2, tie_breaker = True, 
+stgkm = STGKM(distance_matrix=subset_distance_matrix, penalty=penalty, max_drift=1, num_clusters=2, tie_breaker = True, 
               iterations = 100)
 
 stgkm.run_stgkm(method = 'full')

@@ -1,5 +1,20 @@
 import numpy as np
-from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score
+from sklearn.metrics import pairwise_distances, adjusted_mutual_info_score, f1_score
+
+
+def fill_out_predictions(assignments, t):
+    n, t_size = assignments.shape
+    new_assignments = np.zeros((n, t))
+
+    for j, row in enumerate(assignments):
+        for i, entry in enumerate(row[:-1]):
+            if row[i] == row[i + 1]:
+                new_assignments[j, i * 10:(i + 1) * 10] = entry
+                print(new_assignments[j, :])
+            else:
+                new_assignments[j, i * 10:(i + 1) * 10 // 2] = entry
+                new_assignments[j, (i + 1) * 10 // 2:(i + 1) * 10] = row[i + 1]
+    return new_assignments
 
 
 def similarity_measure(x: np.array, y: np.array) -> np.float:
@@ -44,8 +59,11 @@ def find_k_clusters(k: int,
     threshold = 0.70
 
     long_term_clusters = find_long_term_clusters(similarity_threshold=threshold, criteria_mat=criteria_mat)
+    best_long_term_clusters = long_term_clusters
 
     iters = 0
+    min_cluster_difference = abs(len(long_term_clusters) - k)
+
     while len(long_term_clusters) != k:
         long_term_clusters = find_long_term_clusters(
             similarity_threshold=threshold,
@@ -56,6 +74,10 @@ def find_k_clusters(k: int,
             threshold -= threshold_change
         elif len(long_term_clusters) < k:
             threshold += threshold_change
+
+        cluster_difference = abs(len(long_term_clusters) - k)
+        if cluster_difference < min_cluster_difference:
+            best_long_term_clusters = long_term_clusters
 
         iters += 1
 
@@ -75,14 +97,11 @@ def find_k_clusters(k: int,
 
             return long_term_clusters
 
-        elif iters > 1/threshold_change:
-            print('Could not find k clusters')
-            return long_term_clusters
-
     if verbose is True:
         print("Threshold for ", k, " clusters: ", threshold)
 
-    return long_term_clusters
+    return best_long_term_clusters
+
 
 
 def find_long_term_clusters(
@@ -171,5 +190,7 @@ def find_optimal_threshold(weights, k, true_labels):
     assignments = weights
 
     tot_ami = adjusted_mutual_info_score(np.tile(true_labels, t), (assignments.T).reshape(t * n))
+
+    # f1 = f1_score(np.tile(true_labels, t), (assignments.T).reshape(t * n))
 
     return ami, tot_ami
