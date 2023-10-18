@@ -198,7 +198,7 @@ def score_predicted_assignments(
         tot_ami (float):
     """
     # pred_labels = find_final_labels(weights, k, all_labels=[], counts=[])
-    pred_labels = find_final_label_sc(weights, num_clusters)
+    pred_labels = agglomerative_clustering(weights, num_clusters)
 
     ami = adjusted_mutual_info_score(true_labels, pred_labels)
 
@@ -257,16 +257,9 @@ def ltc_to_list(num_points: int, mapped_ltc: List[List[int]]) -> np.ndarray:
     return pred_labels
 
 
-def find_final_label_sc(weights: np.ndarray, k: int):
+def agglomerative_clustering(weights: np.ndarray, k: int):
     """ Find final long term cluster labels using agglomerative clustering """
     criteria_mat = similarity_matrix(weights, similarity_function=similarity_measure)
-
-    # L = LaplacianMatrix(criteria_mat)
-    # X, eigvals = EigVecMatrix(L, k)
-    # normalX = Normalize(X)
-
-    # model = KMeans(n_clusters=k, random_state=0).fit(normalX)
-
     model = AgglomerativeClustering(n_clusters=k, linkage="average", affinity="precomputed")
     model.fit(1-criteria_mat)
 
