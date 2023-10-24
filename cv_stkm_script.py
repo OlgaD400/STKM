@@ -14,7 +14,7 @@ import pandas as pd
 ############## DEFINE MODEL ##############
 #Load a pre-trained ResNet model
 model = models.resnet50(pretrained=True)
-model = torch.nn.Sequential(*(list(model.children())[:-2]))  # Keep the spatial dimensions in the output
+model = torch.nn.Sequential(*(list(model.children())[:-1]))  # Keep the spatial dimensions in the output
 model.eval()
 
 # Image transformation pipeline
@@ -47,9 +47,9 @@ for dir_name in glob.iglob('cv_data/train/JPEGImages/**/', recursive = True):
 
             root_filename = dir_name.split('/')[-2]
 
-            if root_filename in cv_df['root_filename']:
+            if root_filename in cv_df['root_filename'].values:
                 print(dir_name, ' already processed')
-                continue
+                # continue
 
             relevant_video = video_df[video_df['root_filename'] == root_filename]
     
@@ -90,7 +90,7 @@ for dir_name in glob.iglob('cv_data/train/JPEGImages/**/', recursive = True):
             tkm = TKM(input_data)
             for trial in range(trials):
                 start_time = time.time()
-                tkm.perform_clustering(num_clusters=2, lam=.8, max_iter=1000, init_centers = 'kmeans_plus_plus')
+                tkm.perform_clustering(num_clusters=2, lam=0, max_iter=1000, init_centers = 'kmeans_plus_plus')
                 #Evaluate performance
                 new_score, true_mask, extended_mask = evaluate_bbox_prediction(true_bboxes = tracked_objects[0],
                                                              weights = tkm.weights,
@@ -100,15 +100,22 @@ for dir_name in glob.iglob('cv_data/train/JPEGImages/**/', recursive = True):
                     max_score = new_score
                     runtime = time.time() - start_time
             
-            cv_df = cv_df.append({'root_filename': root_filename,
-                                  'avg_jaccard_index': max_score, 
-                                  'runtime': runtime}, 
-                                  ignore_index = True)
+            # cv_df = cv_df.append({'root_filename': root_filename,
+            #                       'avg_jaccard_index': max_score, 
+            #                       'runtime': runtime}, 
+            #                       ignore_index = True)
 
-            cv_df.to_pickle('stgkm_computer_vision_df.pkl')
+            # cv_df.to_pickle('stgkm_computer_vision_df.pkl')
             
+            plt.figure()
+            plt.imshow(og_image.resize((224,224)))
+            plt.imshow(true_mask, alpha = 0.3)
+            plt.imshow(extended_mask, alpha = 0.5)
+            plt.show()
+
             count +=1
-            if count%10 == 0:
+            if count%5 == 0:
+                break
                 print(count)
             
 recovered_df = pd.read_pickle('stgkm_computer_vision_df.pkl')
@@ -140,3 +147,4 @@ recovered_df.head()
 # ann_df, vid_df = train_json_to_df(json_path = 'cv_data/vis-train/train.json')
 # image_paths, input_data = generate_input_data(image_directory = 'cv_data/train/JPEGImages/0b5b5e8e5a/')
 # return_bbox_image(root_filename='0b5b5e8e5a', image_paths = image_paths, index = 10, annotation_df=ann_df, video_df=vid_df)
+

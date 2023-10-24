@@ -6,18 +6,22 @@ from PIL import Image
 import numpy as np
 from stkm.TKM import TKM
 import time
-from stkm.TKM_long_term_clusters import agglomerative_clustering
 import glob
 import matplotlib.pyplot as plt
 from natsort import natsorted
 import json
 import pandas as pd
+from typing import Optional
 
 
 
 # Load a pre-trained ResNet model
 model = models.resnet50(pretrained=True)
-model = torch.nn.Sequential(*(list(model.children())[:-2]))  # Keep the spatial dimensions in the output
+print(list(model.children())[-3][0])
+layers = list(model.children())[:-2] +torch.nn.Sequential(*list(model.children())[-3][0])
+
+print(layers)
+model = torch.nn.Sequential(*(layers))  # Keep the spatial dimensions in the output
 model.eval()
 
 # Image transformation pipeline
@@ -32,10 +36,14 @@ def get_image(image_path):
     og_size = img.size
     return img, og_size
 
-def image_to_embedding(image_path):
+def image_to_embedding(image_path: Optional[str] = None, img = None):
     """Convert an image to a latent space embedding with spatial dimensions using a pre-trained ResNet model."""
-    img, _ = get_image(image_path)
-
+    
+    assert (image_path is not None) | (img is not None), "Must pass in either an image or a valid path to the image."
+    
+    if img is None: 
+        img, _ = get_image(image_path)
+    
     img = preprocess(img)
     img = Variable(img.unsqueeze(0))
 
@@ -51,25 +59,12 @@ def generate_input_data(image_directory):
     image_paths = [path for path in glob.iglob(image_directory + '*.jpg')]
     image_paths= natsorted(image_paths)
     embeddings = [image_to_embedding(path) for path in image_paths]
-
+    print(embeddings[0].shape)
+    #2048
     embedding_numpy = [embedding.numpy().reshape((2048, -1)) for embedding in embeddings]
     input_data = np.array(embedding_numpy)
 
     return image_paths, input_data
-
-
-def image_grid(image_path):
-    """Display image with 7x7 grid on top."""
-    img = Image.open(image_path)
-    img = preprocess(img)
-    img_t = np.transpose(img.numpy(), (1,2,0))
-
-    dx, dy = 32,32
-    grid_color = [0,0,0]
-    img_t[:,::dy, :] = grid_color
-    img_t[::dx, :,:] = grid_color
-
-    return img_t
 
 def return_masked_image(image_paths, index, weights):
     """
@@ -77,8 +72,9 @@ def return_masked_image(image_paths, index, weights):
     """
     img = Image.open(image_paths[index])
     img = img.resize((224,224))
-
+    #7 7 
     mask = np.argmax(weights[index], axis = 1).reshape((7,7))
+    #32 32
     extended_mask = np.repeat(np.repeat(mask, 32, axis=0), 32, axis=1)
 
     plt.imshow(img)
@@ -131,7 +127,7 @@ def compare_true_vs_predicted_bboxes(true_bbox, predicted_bbox, og_cols, og_rows
         #[1] to take into account the first dimension of flattened masks
         cluster_pixels = np.where(flat_predicted_bbox == cluster)[1]
         #Not where they're equal, but how many values they have in common
-        intersection = len(np.intersect1d(np.nonzero(flat_true_mask)[1], cluster_pixels))
+        intersection = len(np.intersect1d(np.nonzero(flat_true_mask)[1], cluster_pixels, assume_unique = True))
         #Size of individual masks minus their overlap
         union = np.sum(true_mask == 1) + np.sum(predicted_bbox == cluster) - intersection
         jaccard_index = intersection/union
@@ -160,9 +156,10 @@ def return_bbox_image(root_filename, image_paths, index, annotation_df, video_df
         print('No object detected')
         return None
     
+    img = Image.open(image_paths[index])
+    cols, rows = img.size
+    
     if resize:
-        img = Image.open(image_paths[index])
-        cols, rows = img.size
         img = img.resize((224,224), resample = Image.BILINEAR)
 
         y_scale = 224/cols
@@ -244,7 +241,14 @@ def train_json_to_df(json_path:str):
 
     return annotation_df, video_df
 
-    
+dir = 'cv_data/train/JPEGImages/0b34ec1d55/' #0ae1ff65a5/'
+image_paths, input_data = generate_input_data(image_directory=dir)
+
+tkm = TKM(input_data)
+tkm.perform_clustering(num_clusters = 2, lam = .8, max_iter = 1000)
+return_masked_image(image_paths = image_paths, index = 15, weights = tkm.weights)
+
+
 
 #min_k = 1
 #max_k = 5
