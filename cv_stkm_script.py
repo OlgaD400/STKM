@@ -1,5 +1,6 @@
-import torch
+"""Run STKM on every video in a directory. Return jaccard similarity between true and predicted bboxes."""
 
+import torch
 from torchvision import models, transforms
 from torch.autograd import Variable
 from PIL import Image
@@ -29,7 +30,6 @@ preprocess = transforms.Compose([
 # max_k = 5
 
 annotation_df, video_df = train_json_to_df(json_path='cv_data/vis-train/train.json')
-#number of times to run k means-- initialization messes with you 
 trials = 5
 count = 0 
 
@@ -50,6 +50,7 @@ for dir_name in glob.iglob('cv_data/train/JPEGImages/**/', recursive = True):
             if root_filename in cv_df['root_filename'].values:
                 print(dir_name, ' already processed')
                 # continue
+
 
             relevant_video = video_df[video_df['root_filename'] == root_filename]
     

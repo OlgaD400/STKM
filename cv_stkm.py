@@ -1,5 +1,4 @@
 import torch
-
 from torchvision import models, transforms
 from torch.autograd import Variable
 from PIL import Image
@@ -17,10 +16,8 @@ from typing import Optional
 
 # Load a pre-trained ResNet model
 model = models.resnet50(pretrained=True)
-print(list(model.children())[-3][0])
-layers = list(model.children())[:-2] +torch.nn.Sequential(*list(model.children())[-3][0])
+layers = list(model.children())[:-2]
 
-print(layers)
 model = torch.nn.Sequential(*(layers))  # Keep the spatial dimensions in the output
 model.eval()
 
@@ -59,7 +56,6 @@ def generate_input_data(image_directory):
     image_paths = [path for path in glob.iglob(image_directory + '*.jpg')]
     image_paths= natsorted(image_paths)
     embeddings = [image_to_embedding(path) for path in image_paths]
-    print(embeddings[0].shape)
     #2048
     embedding_numpy = [embedding.numpy().reshape((2048, -1)) for embedding in embeddings]
     input_data = np.array(embedding_numpy)
@@ -137,11 +133,41 @@ def compare_true_vs_predicted_bboxes(true_bbox, predicted_bbox, og_cols, og_rows
 
     return max_jaccard_index, true_mask
 
+def return_true_and_predicted_bbox_image(root_filename, image_paths, index, annotation_df, video_df, weights):
+    """
+    Return a version of an image masked according to both its ground truth and predicted bboxes.
+    """
+    img = Image.open(image_paths[index])
+    cols, rows = img.size
+    
+    bbox = get_true_bbox(root_filename = root_filename, video_df=video_df, annotation_df= annotation_df, index = index)
+    bbox_mask = rescale_true_bbox(bbox, cols = cols, rows = rows)
 
-def return_bbox_image(root_filename, image_paths, index, annotation_df, video_df, resize = False):
-    """
-    Return a version of an image masked according to its ground truth bboxes.
-    """
+    pred_mask = np.argmax(weights[index], axis = 1).reshape((7,7))
+    extended_pred_mask = np.repeat(np.repeat(pred_mask, 32, axis=0), 32, axis=1)
+
+    plt.imshow(img.resize((224,224)))
+    plt.imshow(bbox_mask, alpha = 0.3)
+    plt.imshow(extended_pred_mask, alpha = 0.5)
+    plt.show()
+    return None
+
+def rescale_true_bbox(bbox, cols, rows):
+    """Rescale the true bbox."""
+    y_scale = 224/cols
+    x_scale = 224/rows
+
+    y = int(np.round(bbox[0]*y_scale))
+    x = int(np.round(bbox[1]*x_scale))
+    h = int(np.round(bbox[2]*y_scale))
+    w = int(np.round(bbox[3]*x_scale))
+    mask = np.zeros((224,224))
+    mask[x: x+w,:][:, y:y+h] = 1
+
+    return mask
+
+def get_true_bbox(root_filename, video_df, annotation_df, index):
+    """Get true bboxes for a given video."""
     relevant_video = video_df[video_df['root_filename'] == root_filename]
     
     if len(relevant_video) == 0:
@@ -155,29 +181,28 @@ def return_bbox_image(root_filename, image_paths, index, annotation_df, video_df
     if bbox[0] is None:
         print('No object detected')
         return None
+
+    return bbox
+
+def return_bbox_image(root_filename, image_paths, index, annotation_df, video_df, resize = False):
+    """
+    Return a version of an image masked according to its ground truth bboxes.
+    """
+    bbox = get_true_bbox(root_filename=root_filename, video_df = video_df, annotation_df=annotation_df, index = index)
     
     img = Image.open(image_paths[index])
     cols, rows = img.size
     
     if resize:
         img = img.resize((224,224), resample = Image.BILINEAR)
-
-        y_scale = 224/cols
-        x_scale = 224/rows
-
-        y = int(np.round(bbox[0]*y_scale))
-        x = int(np.round(bbox[1]*x_scale))
-        h = int(np.round(bbox[2]*y_scale))
-        w = int(np.round(bbox[3]*x_scale))
-        mask = np.zeros((224,224))
+        mask = rescale_true_bbox(bbox = bbox, rows = rows, cols = cols)
     else:
         y = int(bbox[0])
         x = int(bbox[1])
         h = int(bbox[2])
         w = int(bbox[3])
         mask = np.zeros((720, 1280))
-    
-    mask[x: x+w,:][:, y:y+h] = 1
+        mask[x: x+w,:][:, y:y+h] = 1
 
     plt.imshow(img)
     plt.imshow(mask, alpha = 0.3)
@@ -241,12 +266,13 @@ def train_json_to_df(json_path:str):
 
     return annotation_df, video_df
 
-dir = 'cv_data/train/JPEGImages/0b34ec1d55/' #0ae1ff65a5/'
-image_paths, input_data = generate_input_data(image_directory=dir)
 
-tkm = TKM(input_data)
-tkm.perform_clustering(num_clusters = 2, lam = .8, max_iter = 1000)
-return_masked_image(image_paths = image_paths, index = 15, weights = tkm.weights)
+# dir = 'cv_data/train/JPEGImages/0b34ec1d55/' #0ae1ff65a5/'
+# image_paths, input_data = generate_input_data(image_directory=dir)
+
+# tkm = TKM(input_data)
+# tkm.perform_clustering(num_clusters = 2, lam = .8, max_iter = 1000)
+# return_masked_image(image_paths = image_paths, index = 15, weights = tkm.weights)
 
 
 
