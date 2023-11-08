@@ -242,6 +242,7 @@ class TKM:
         init_centers = 'kmeans_plus_plus',
         verbose: bool = False,
         d_k: float = 1.1,
+        gamma: float = 1e-3
     ) -> None:
         """
         Perform Time k Means algorithm and set values for TKM attributes.
@@ -283,8 +284,6 @@ class TKM:
         )
 
         while err >= tol:
-            gamma = .1
-
             term_1 = np.zeros((timesteps, num_dimensions, num_clusters))
             for k in range(num_clusters):
                 #weights for a given cluster
