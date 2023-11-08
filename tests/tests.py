@@ -1,7 +1,7 @@
 import unittest
 from TKM import simplex_prox
 import numpy as np
-from distance_functions import s_journey
+from stgkm.distance_functions import s_journey
 
 
 class Tests(unittest.TestCase):
