@@ -4,7 +4,7 @@ import glob, os
 import torch
 from torchvision import models, transforms
 import pandas as pd
-from stkm.TKM import TKM
+from stkm.STKM import STKM
 from cv_stkm import (get_true_bboxes,
                      train_json_to_df,
                      generate_input_data,
@@ -64,7 +64,7 @@ for dir_name in glob.iglob('cv_data/train/JPEGImages/**/', recursive = True):
 
             #Run a handful of trials of stkm
             MAX_SCORE = 0
-            tkm = TKM(input_data)
+            tkm = STKM(input_data)
             for trial in range(TRIALS):
                 start_time = time.time()
                 tkm.perform_clustering_cosine(num_clusters=2, lam=0.8, max_iter=1000, init_centers = 'kmeans_plus_plus')

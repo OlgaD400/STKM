@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from natsort import natsorted
 import pandas as pd
-from stkm.TKM import TKM
+from stkm.STKM import STKM
 
 # Load a pre-trained ResNet model
 model = models.resnet50(pretrained=True)
@@ -309,7 +309,7 @@ def calculate_wcss(input_data: np.ndarray, min_k: int, max_k: int, max_iter= 100
     wcss_k = []
 
     for k in range(min_k, max_k):
-        tkm = TKM(input_data)
+        tkm = STKM(input_data)
 
         tkm.perform_clustering(num_clusters=k, lam=.8, max_iter=max_iter)
         
