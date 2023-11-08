@@ -360,6 +360,7 @@ class TKM:
         init_centers = 'kmeans_plus_plus',
         verbose: bool = False,
         d_k: float = 1.1,
+        gamma: float = 1e-3, 
     ) -> None:
         """
         Perform Time k Means algorithm and set values for TKM attributes.
@@ -414,7 +415,6 @@ class TKM:
             # weights_step = weights - 1/d_k* data_centers_cosine_similarity
             # weights_new = simplex_prox(weights_step, 1)
 
-            gamma = .1
             centers_derivative_term_1 = np.transpose(weights, axes = [0,2,1])@np.transpose(self.data, axes = [0,2,1])
             centers_derivative_term_2 = lam*num_points*centers_shifted
             centers_new = centers - gamma*(np.transpose(centers_derivative_term_1, axes = [0,2,1]) + centers_derivative_term_2)
@@ -928,3 +928,24 @@ class TKM:
         return centers_derivative
         
 
+# from TKM import TKM
+# import numpy as np 
+# import matplotlib.pyplot as plt
+
+# timesteps = 10
+# dimension = 3
+# num_points = 100
+# num_clusters = 2
+
+# data = np.random.rand(timesteps,dimension,num_points)
+# weights = np.random.rand(timesteps,num_points,num_clusters)
+# centers = np.random.rand(timesteps,dimension,num_clusters)
+
+# tkm = TKM(data = data)
+# tkm.perform_clustering_l1(num_clusters = 2)
+
+# plt.figure()
+# plt.plot(tkm.err_hist)
+
+# plt.figure()
+# plt.plot(tkm.obj_hist)
