@@ -182,6 +182,7 @@ class STKM:
         """Cosine obj variable updates."""
         ### Data has been transposed when cosine updates are called. ####
         _, _, num_points = self.data.shape
+
         centers_derivative_term_1 = self.data @ weights
         centers_derivative_term_2 = lam * num_points * centers_shifted
         centers_new = centers - gamma * (
@@ -208,11 +209,8 @@ class STKM:
         )
 
         sum_term_1 = np.sum(weights_new * data_center_product)
-        sum_term_2 = (
-            lam
-            * num_points
-            * np.sum(centers_new @ np.transpose(centers_shifted_new, axes=[0, 2, 1]))
-        )
+
+        sum_term_2 = lam * num_points * np.sum(centers_new * centers_shifted_new)
 
         obj = sum_term_1 + sum_term_2
 
