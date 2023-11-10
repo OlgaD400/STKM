@@ -189,6 +189,7 @@ class STKM:
         return centers_new, weights_new, centers_shifted_new, err, obj
     
     def l1_variable_updates(self, weights: np.ndarray, centers: np.ndarray, centers_shifted: np.ndarray, lam: float = .70, d_k: float = 1.1, gamma: float = 1e-3):
+        """L1 variable updates."""
         timesteps, num_dimensions, num_clusters = centers.shape
         _, _, num_points = self.data.shape
 
