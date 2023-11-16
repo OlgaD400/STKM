@@ -27,10 +27,10 @@ from cv_stkm import generate_input_data, return_predicted_masked_image
 # plt.plot(tkm.obj_hist)
 
 #######################################################################
-dir = "cv_data/plume/LeakVid54Frames/"
+dir = "cv_data/train/JPEGImages/0f9683715b/"  # 1a6c0fbd1e/"
 image_paths, input_data = generate_input_data(image_directory=dir)
 
-stkm = STKM(input_data[:100])
-stkm.perform_clustering(num_clusters=3, lam=0.8, max_iter=1000)
+stkm = STKM(input_data)
+stkm.perform_clustering(num_clusters=2, lam=0.8, max_iter=500, method="L1", gamma=1e-3)
 
-return_predicted_masked_image(image_paths=image_paths, index=10, weights=stkm.weights)
+# return_predicted_masked_image(image_paths=image_paths, index=10, weights=stkm.weights)

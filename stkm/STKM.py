@@ -216,6 +216,47 @@ class STKM:
 
         return centers_new, weights_new, centers_shifted_new, err, obj
 
+    def data_center_l1_derivative(self, centers, weights):
+        """
+        sum_{tij}||xti - ctj||_1 derivative wrt c_tj i.e. sum_i wtijsign(xti - ctj)
+        """
+        timesteps, num_dimensions, num_clusters = centers.shape
+
+        # t m n
+        # t m k
+        # t n k
+
+        # t,m,n,k
+        # tiled_data = np.repeat(self.data[:,:,:, np.newaxis], num_clusters, axis=3)
+        # difference = tiled_data - centers[:, :, np.newaxis, :]
+        # sign_difference = np.sign(difference)
+        # product = weights[:, np.newaxis, :, :] * sign_difference
+
+        # term_1 = np.sum(product, axis=2)
+
+        term_1 = np.zeros((timesteps, num_dimensions, num_clusters))
+        for k in range(num_clusters):
+            # weights for a given cluster
+            difference = self.data - centers[:, :, k][:, :, np.newaxis]
+            sign_difference = np.sign(difference)
+            # sign_difference = np.apply_along_axis(np.sign, axis=1, arr=difference)
+            product = weights[:, :, k][:, np.newaxis, :] * sign_difference
+            product_sum = np.sum(product, axis=2)
+            term_1[:, :, k] = product_sum
+        return term_1
+
+    def center_prox_l1_derivative(self, input_arg, gamma_inverse):
+        """Prox of ||ctj - ct+1j||_1"""
+        signed_input_arg = np.apply_along_axis(np.sign, axis=1, arr=input_arg)
+
+        input_gamma_difference = np.abs(input_arg) - gamma_inverse
+        center_prox = np.where(
+            input_gamma_difference > 0,
+            signed_input_arg * input_gamma_difference,
+            0,
+        )
+        return center_prox
+
     def l1_variable_updates(
         self,
         weights: np.ndarray,
@@ -226,25 +267,24 @@ class STKM:
         gamma: float = 1e-3,
     ):
         """L1 variable updates."""
-        timesteps, num_dimensions, num_clusters = centers.shape
+        timesteps, _, num_clusters = centers.shape
         _, _, num_points = self.data.shape
 
-        term_1 = np.zeros((timesteps, num_dimensions, num_clusters))
-        for k in range(num_clusters):
-            # weights for a given cluster
-            difference = self.data - centers[:, :, k][:, :, np.newaxis]
-            sign_difference = np.apply_along_axis(np.sign, axis=1, arr=difference)
-            product = weights[:, :, k][:, np.newaxis, :] * sign_difference
-            product_sum = np.sum(product, axis=2)
-            term_1[:, :, k] = product_sum
+        # gamma = 1 / ((1 + 2* num_points + np.sqrt(num_dimensions)) * 1.1)
+
+        term_1 = self.data_center_l1_derivative(centers, weights)
 
         center_difference = centers - centers_shifted
-        signed_center_difference = np.apply_along_axis(
-            np.sign, axis=1, arr=center_difference
-        )
+        signed_center_difference = np.sign(center_difference)
+        #     np.sign, axis=1, arr=center_difference
+        # )
         term_2 = lam * num_points * signed_center_difference
 
         centers_new = centers - gamma * (term_1 + term_2)
+        # centers_new = self.center_prox_l1_derivative(
+        #     input_arg=input_arg,
+        #     gamma_inverse=1 / gamma,
+        # )
 
         data_center_difference_norm = np.zeros((timesteps, num_points, num_clusters))
         for k in range(num_clusters):
@@ -255,8 +295,8 @@ class STKM:
         weights_step = weights - 1 / d_k * data_center_difference_norm
         weights_new = simplex_prox(weights_step, 1)
 
-        centers_err = np.linalg.norm(centers - centers_new)
-        weights_err = np.linalg.norm(weights - weights_new)
+        centers_err = np.linalg.norm(np.ravel(centers - centers_new), 2)
+        weights_err = np.linalg.norm(np.ravel(weights - weights_new), 2)
 
         err = d_k * weights_err + centers_err
 
@@ -273,7 +313,7 @@ class STKM:
 
         obj = sum_term_1 + sum_term_2
 
-        return centers_new, weights_new, centers_shifted_new, obj, err
+        return centers_new, weights_new, centers_shifted_new, err, obj
 
     def perform_clustering(
         self,
