@@ -84,7 +84,7 @@ for dir_name in glob.iglob("cv_data/train/JPEGImages/**/", recursive=True):
                     max_iter=200,
                     init_centers="kmeans_plus_plus",
                     method="L1",
-                    # gamma=1e-4,
+                    gamma=1e-4,
                 )
                 # Evaluate performance
                 new_score = evaluate_bbox_prediction(
