@@ -1,7 +1,6 @@
 """Example script for running stkm for cv problems."""
 
 import matplotlib.pyplot as plt
-from PIL import Image
 import torch
 from torchvision import models, transforms
 from stkm.STKM import STKM
