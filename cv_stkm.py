@@ -1,34 +1,19 @@
 "Functions for applying stkm to cv problems."
+
 import glob
 import json
-from typing import Optional, List
+from typing import Optional, List, Tuple
 import torch
-from torchvision import models, transforms
 from torch.autograd import Variable
 from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 from natsort import natsorted
 import pandas as pd
+import shapely.geometry
+import shapely.ops
+from sklearn.decomposition import PCA
 from stkm.STKM import STKM
-
-# Load a pre-trained ResNet model
-model = models.resnet50(pretrained=True)
-layers = list(model.children())[:-2]
-
-model = torch.nn.Sequential(*(layers))  # Keep the spatial dimensions in the output
-model.eval()
-
-# Image transformation pipeline
-preprocess = transforms.Compose(
-    [
-        transforms.Resize(
-            (224, 224)
-        ),  # Change this to the size of your images if you want to maintain the same resolution
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ]
-)
 
 
 def get_image(image_path: str):
@@ -46,12 +31,14 @@ def get_image(image_path: str):
     return img, og_size
 
 
-def image_to_embedding(image_path: Optional[str] = None, img=None):
+def image_to_embedding(model, preprocess, image_path: Optional[str] = None, img=None):
     """
     Convert an image to a latent space embedding with spatial dimensions
-    using a pre-trained ResNet model.
+    using a CNN model.
 
     Args:
+        model: CNN model to use on the image
+        preprocess: Preprocessing steps to use on an image
         image_path (Optional[str]): Path to imag to be converted to an
             embedding. If not provided, user must instead directly pass
             in an image.
@@ -74,25 +61,33 @@ def image_to_embedding(image_path: Optional[str] = None, img=None):
     with torch.no_grad():
         embedding = model(img)
 
-    return embedding.squeeze(0)  # Remove the batch dimension
+    # Remove the batch dimension
+    return embedding.squeeze(0)
 
 
-def generate_input_data(image_directory: str):
+def generate_input_data(
+    image_directory: str, model, preprocess
+) -> Tuple[List[str], np.ndarray]:
     """
     Generate embeddings for each video frame in a directory.
 
     Args:
         image_directory (str): Image directory containing frames from a video.
+        model: CNN model to use on the image
+        preprocess: Preprocessing steps to use on an image
     Returns:
         image_paths (List[str]): All paths to images in the directory.
         input_data (np.ndarray): Array containing embeddings of each video frame in a directory.
     """
     image_paths = [path for path in glob.iglob(image_directory + "*.jpg")]
     image_paths = natsorted(image_paths)
-    embeddings = [image_to_embedding(path) for path in image_paths]
-    # 2048
+    embeddings = [
+        image_to_embedding(image_path=path, model=model, preprocess=preprocess)
+        for path in image_paths
+    ]
+    embedding_features = embeddings[0].shape[0]
     embedding_numpy = [
-        embedding.numpy().reshape((2048, -1)) for embedding in embeddings
+        embedding.numpy().reshape((embedding_features, -1)) for embedding in embeddings
     ]
     input_data = np.array(embedding_numpy)
 
@@ -100,29 +95,65 @@ def generate_input_data(image_directory: str):
 
 
 def return_predicted_masked_image(
-    image_paths: List[str], index: int, weights: np.ndarray
+    image_paths: List[str],
+    index: int,
+    weights: np.ndarray,
+    plot_outlines: bool = False,
+    filepath: Optional[str] = None,
+    plot: Optional[bool] = True,
+    **kwargs
 ):
     """
-    Return version of the image masked by predicted clusters from STGkM.
+    Return version of the image masked by predicted clusters from STkM.
 
     Args:
         image_paths (List[str]): All paths to video frames in a directory.
         index (int): Index referring to which video frame in the image_path list to visualize.
-        weights (np.ndarray): Cluster membership weights from STGkM.
+        weights (np.ndarray): Cluster membership weights from STkM.
+        plot_outlines (bool): Whether or not to give clusters an outline
+        filepath (Optional[str]): Filepath to which to save figure
+        plot (Optional[str]): Display the figure
 
+    Kwargs:
+        alpha (float): Weight of cluster outlines
+
+    Returns:
+        img (Image): Image to display
+        extended_mask (np.ndarray): Mask extended to 224x224 pixel grid
+        full_geoms (List[MultiPolygon]): List containing polygons corresponding to superpixel clusters
     """
+    alpha = kwargs.pop("alpha", 0.30)
     img = Image.open(image_paths[index])
     img = img.resize((224, 224))
     # 7 7
     mask = np.argmax(weights[index], axis=1).reshape((7, 7))
     # 32 32
     extended_mask = np.repeat(np.repeat(mask, 32, axis=0), 32, axis=1)
+    full_geoms = []
 
-    plt.imshow(img)
-    plt.imshow(extended_mask, alpha=0.3)
-    plt.show()
+    if plot_outlines is True:
+        for label in np.unique(extended_mask):
+            geoms = []
+            for yidx, xidx in zip(*np.where(extended_mask == label)):
+                geoms.append(shapely.geometry.box(xidx, yidx, xidx + 1, yidx + 1))
+            full_geom = shapely.ops.unary_union(geoms)
+            if full_geom.geom_type == "MultiPolygon":
+                for geom in full_geom:
+                    full_geoms.append(geom)
+            else:
+                full_geoms.append(full_geom)
+    if plot:
 
-    return None
+        for full_geom in full_geoms:
+            x, y = full_geom.exterior.xy
+            plt.plot(x, y, linewidth=3, color="r")
+
+        plt.imshow(img)
+        plt.imshow(extended_mask, alpha=alpha)
+        if filepath is not None:
+            plt.savefig(filepath, format="pdf")
+        plt.show()
+    return img, extended_mask, full_geoms
 
 
 def combine_true_bboxes(
@@ -135,8 +166,7 @@ def combine_true_bboxes(
     Combine all ground truth bboxes into a single foreground mask.
 
     Args:
-        true_bboxes (List[np.ndarray]): Ground truth bboxes. This is a list of shape (num objects,).
-            Each array in the list is of length timeslices.
+        true_bboxes (List[np.ndarray]): Ground truth bboxes. This is a list of shape (num objects,). Each array in the list is of length timeslices.
         og_cols (int): Original number of columns in the image.
         og_rows (int): Original number of rows in the image.
         scale_to_grid (bool). Whether or not to scale the ground truth bboxes to a 7x7 grid.
@@ -235,6 +265,7 @@ def evaluate_bbox_prediction(
     og_cols: int,
     og_rows: int,
     scale_to_grid=False,
+    metric: str = "jaccard",
 ):
     """
     Calculate the Jaccard index of the true vs predicted bounding boxes.
@@ -247,8 +278,7 @@ def evaluate_bbox_prediction(
         og_rows (int): Original number of rows in the image.
         scale_to_grid (bool). Whether or not to scale the ground truth bboxes to a 7x7 grid.
     Returns:
-        (float): Average jaccard index of true vs predicted bboxes across over
-            all frames of a video.
+        (float): Average jaccard index of true vs predicted bboxes across over all frames of a video.
     """
     timesteps = weights.shape[0]
     # Convert bboxes to single 224x224 foreground mask
@@ -256,20 +286,25 @@ def evaluate_bbox_prediction(
         true_bboxes, og_cols=og_cols, og_rows=og_rows, scale_to_grid=scale_to_grid
     )
 
-    jaccard_indices = []
+    all_scores = []
+
     for index in range(timesteps):
         mask = np.argmax(weights[index], axis=1).reshape((7, 7))
+
         extended_mask = np.repeat(np.repeat(mask, 32, axis=0), 32, axis=1)
 
-        jaccard_index = compare_true_vs_predicted_mask(
-            true_mask=true_masks[index], predicted_mask=extended_mask
+        frame_score = compare_true_vs_predicted_mask(
+            true_mask=true_masks[index], predicted_mask=extended_mask, metric=metric
         )
-        jaccard_indices.append(jaccard_index)
 
-    return np.average(jaccard_indices)
+        all_scores.append(frame_score)
+
+    return np.average(all_scores)
 
 
-def compare_true_vs_predicted_mask(true_mask: np.ndarray, predicted_mask: np.ndarray):
+def compare_true_vs_predicted_mask(
+    true_mask: np.ndarray, predicted_mask: np.ndarray, metric: str = "jaccard"
+):
     """
     Compare true vs predicted masks.
 
@@ -283,7 +318,7 @@ def compare_true_vs_predicted_mask(true_mask: np.ndarray, predicted_mask: np.nda
     """
     flat_true_mask = true_mask.reshape(1, -1)
     flat_predicted_bbox = predicted_mask.reshape(1, -1)
-    max_jaccard_index = 0
+    max_score = 0
     for cluster in np.unique(flat_predicted_bbox):
         # [1] to take into account the first dimension of flattened masks
         cluster_pixels = np.where(flat_predicted_bbox == cluster)[1]
@@ -293,16 +328,24 @@ def compare_true_vs_predicted_mask(true_mask: np.ndarray, predicted_mask: np.nda
                 np.nonzero(flat_true_mask)[1], cluster_pixels, assume_unique=True
             )
         )
-        # Size of individual masks minus their overlap
-        union = (
-            np.sum(true_mask == 1) + np.sum(predicted_mask == cluster) - intersection
-        )
-        jaccard_index = intersection / union
 
-        if jaccard_index > max_jaccard_index:
-            max_jaccard_index = jaccard_index
+        if metric == "jaccard":
+            # Size of individual masks minus their overlap
+            union = (
+                np.sum(true_mask == 1)
+                + np.sum(predicted_mask == cluster)
+                - intersection
+            )
+            score = intersection / union
+            # score = jaccard_score(y_true = flat_true_mask, y_pred = flat_predicted_bbox, average = 'micro')
+        elif metric == "percent_detected":
+            total_true_pixels = np.sum(true_mask == 1)
+            score = intersection / total_true_pixels
 
-    return max_jaccard_index
+        if score > max_score:
+            max_score = score
+
+    return max_score
 
 
 def return_bbox_image(
@@ -380,6 +423,47 @@ def get_true_bboxes(
     return bboxes
 
 
+def visualize_clustering(
+    index: int,
+    input_data: np.ndarray,
+    weights: np.ndarray,
+    tracked_objects,
+    og_size: Tuple[int, int],
+):
+    """
+    Visualize the clustering against the top two principal components of the embedded video frames.
+
+    Args:
+        index (int): Index of embeddings to visualize
+        input_data (np.ndarray): Array containing image embeddings
+        weights (np.ndarray): Weights assigning superpixels to clusters
+        tracked_objects: Bounding boxes from ground truth
+        og_size: Original shape of the image
+    """
+    input_data_i = input_data[index].T
+
+    pca = PCA(n_components=2)
+    X_transform = pca.fit_transform(X=input_data_i)
+
+    labels = np.argmax(weights[index], axis=1)
+
+    plt.figure()
+    plt.title("Predicted")
+    plt.scatter(X_transform[:, 0], X_transform[:, 1], c=labels)
+    plt.show()
+
+    true_masks = combine_true_bboxes(
+        tracked_objects, og_cols=og_size[0], og_rows=og_size[1], scale_to_grid=True
+    )
+
+    flat_true_mask = true_masks[index, ::32, ::32].flatten()
+    plt.figure()
+    plt.title("True")
+    plt.scatter(X_transform[:, 0], X_transform[:, 1], c=flat_true_mask)
+    plt.show()
+    return None
+
+
 def calculate_wcss(input_data: np.ndarray, min_k: int, max_k: int, max_iter=100):
     """Elbow curve."""
 
@@ -428,43 +512,3 @@ def train_json_to_df(json_path: str):
     )
 
     return annotation_df, video_df
-
-
-# dir = 'cv_data/train/JPEGImages/0b34ec1d55/' #0ae1ff65a5/'
-# image_paths, input_data = generate_input_data(image_directory=dir)
-
-# tkm = TKM(input_data)
-# tkm.perform_clustering(num_clusters = 2, lam = .8, max_iter = 1000)
-# return_masked_image(image_paths = image_paths, index = 15, weights = tkm.weights)
-
-
-# min_k = 1
-# max_k = 5
-# wcss_k = calculate_wcss(min_k = min_k, max_k = max_k)
-# plt.plot(np.arange(min_k, max_k), wcss_k)
-
-
-# Example usage
-# path_prefix = "cv_data/vos-test/JPEGImages/0e1f91c0d7/"
-# # path_prefix = "cv_data/plume/fixed_avg/"
-
-# image_paths, input_data = generate_input_data(image_directory = path_prefix)
-
-# print('Data generated.')
-
-# tkm = TKM(input_data)
-# start_time = time.time()
-# tkm.perform_clustering(num_clusters=2, lam=.8, max_iter=10000, init_centers = 'kmeans_plus_plus')
-# runtime = time.time() - start_time
-
-
-# for frame in range(len(image_paths)):
-#     img = Image.open(image_paths[frame])
-#     img_t = img.resize((224,224))
-
-#     mask = np.argmax(tkm.weights[frame], axis = 1).reshape((7,7))
-#     extended_mask = np.repeat(np.repeat(mask, 32, axis=0), 32, axis=1)
-
-#     plt.imshow(img_t)
-#     plt.imshow(extended_mask, alpha = .3)
-#     plt.show()
